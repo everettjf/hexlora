@@ -29,3 +29,6 @@ serde.workspace = true
 name = "Hexlora"
 path = "src/main.rs"
 test = false
+
+[build-dependencies]
+embed-resource = "3.0.11"

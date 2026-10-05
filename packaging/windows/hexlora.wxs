@@ -9,6 +9,8 @@
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of Hexlora is already installed." />
     <MediaTemplate EmbedCab="yes" />
+    <Icon Id="HexloraIcon" SourceFile="$(var.SourceDir)\Hexlora.ico" />
+    <Property Id="ARPPRODUCTICON" Value="HexloraIcon" />
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
@@ -20,6 +22,7 @@
                         Name="Hexlora"
                         Description="Application and binary inspection workbench"
                         Advertise="yes"
+                        Icon="HexloraIcon"
                         WorkingDirectory="INSTALLFOLDER" />
             </File>
             <File Id="HexloraCliExe" Source="$(var.SourceDir)\hexlora-cli.exe" />

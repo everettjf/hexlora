@@ -16,6 +16,7 @@ try {
     if (Test-Path $StageDir) { Remove-Item -Recurse -Force $StageDir }
     New-Item -ItemType Directory -Force -Path $StageDir | Out-Null
     Copy-Item target/release/Hexlora.exe, target/release/hexlora-cli.exe, LICENSE, README.md $StageDir
+    Copy-Item packaging/windows/Hexlora.ico $StageDir
 
     $ZipPath = "$StageDir.zip"
     if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
