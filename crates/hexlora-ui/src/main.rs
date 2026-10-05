@@ -169,6 +169,12 @@ impl Default for UiPreferences {
     }
 }
 
+enum DialogKind {
+    File,
+    Folder,
+    Save,
+}
+
 static STARTUP_PATH: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
 
 fn take_startup_path() -> Option<PathBuf> {
@@ -440,33 +446,70 @@ impl HexloraApp {
             inspector_width: preferences.inspector_width.clamp(240., 560.),
         }
     }
+    // Native dialogs must yield before Cocoa runs its nested event loop. Keeping
+    // a GPUI entity borrowed while a dialog is open makes input-source changes
+    // re-enter the app and abort on a RefCell borrow conflict.
+    fn prompt_path(
+        &mut self,
+        dialog: rfd::AsyncFileDialog,
+        kind: DialogKind,
+        cx: &mut Context<Self>,
+        selected: impl FnOnce(&mut Self, PathBuf, &mut Context<Self>) + 'static,
+    ) {
+        cx.spawn(async move |this, cx| {
+            let file = match kind {
+                DialogKind::File => dialog.pick_file().await,
+                DialogKind::Folder => dialog.pick_folder().await,
+                DialogKind::Save => dialog.save_file().await,
+            };
+            if let Some(file) = file {
+                let path = file.path().to_path_buf();
+                this.update(cx, |this, cx| selected(this, path, cx))?;
+            }
+            anyhow::Ok(())
+        })
+        .detach();
+    }
     fn choose(&mut self, folder: bool, cx: &mut Context<Self>) {
-        let path = if folder {
-            rfd::FileDialog::new().pick_folder()
-        } else {
-            rfd::FileDialog::new().pick_file()
-        };
-        if let Some(path) = path {
-            self.load(path, cx)
-        }
+        self.prompt_path(
+            rfd::AsyncFileDialog::new(),
+            if folder {
+                DialogKind::Folder
+            } else {
+                DialogKind::File
+            },
+            cx,
+            |this, path, cx| this.load(path, cx),
+        );
     }
     fn choose_comparison(&mut self, folders: bool, cx: &mut Context<Self>) {
-        let baseline_dialog = rfd::FileDialog::new().set_title("Choose baseline artifact");
-        let Some(before) = (if folders {
-            baseline_dialog.pick_folder()
-        } else {
-            baseline_dialog.pick_file()
-        }) else {
-            return;
-        };
-        let candidate_dialog = rfd::FileDialog::new().set_title("Choose candidate artifact");
-        let Some(after) = (if folders {
-            candidate_dialog.pick_folder()
-        } else {
-            candidate_dialog.pick_file()
-        }) else {
-            return;
-        };
+        cx.spawn(async move |this, cx| {
+            let baseline = rfd::AsyncFileDialog::new().set_title("Choose baseline artifact");
+            let before = if folders {
+                baseline.pick_folder().await
+            } else {
+                baseline.pick_file().await
+            };
+            let Some(before) = before else {
+                return anyhow::Ok(());
+            };
+            let candidate = rfd::AsyncFileDialog::new().set_title("Choose candidate artifact");
+            let after = if folders {
+                candidate.pick_folder().await
+            } else {
+                candidate.pick_file().await
+            };
+            let Some(after) = after else {
+                return anyhow::Ok(());
+            };
+            this.update(cx, |this, cx| {
+                this.begin_comparison(before.path().to_path_buf(), after.path().to_path_buf(), cx)
+            })?;
+            anyhow::Ok(())
+        })
+        .detach();
+    }
+    fn begin_comparison(&mut self, before: PathBuf, after: PathBuf, cx: &mut Context<Self>) {
         self.cancellation.cancel();
         self.cancellation = CancellationToken::default();
         self.task_generation = self.task_generation.wrapping_add(1);
@@ -528,54 +571,59 @@ impl HexloraApp {
         let Some(root) = self.artifact.as_ref() else {
             return;
         };
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Hexlora Workspace", &["hexlora-workspace"])
-            .set_file_name("analysis.hexlora-workspace")
-            .save_file()
-        else {
-            return;
-        };
         let mut workspace = Workspace::new(root.path.clone());
         workspace.selected_path = self.selected_node().map(|node| node.path.clone());
         workspace.selected_view = Some(self.tab.label().into());
         workspace.bookmarks = self.bookmarks.clone();
         workspace.notes = self.notes.clone();
         workspace.analysis_results = self.cache.snapshots_for_artifact(root);
-        match workspace.save(&path) {
-            Ok(()) => self.status = format!("Workspace saved to {}", path.display()).into(),
-            Err(error) => self.error = Some(error.to_string().into()),
-        }
-        cx.notify();
+        self.prompt_path(
+            rfd::AsyncFileDialog::new()
+                .add_filter("Hexlora Workspace", &["hexlora-workspace"])
+                .set_file_name("analysis.hexlora-workspace"),
+            DialogKind::Save,
+            cx,
+            move |this, path, cx| {
+                match workspace.save(&path) {
+                    Ok(()) => this.status = format!("Workspace saved to {}", path.display()).into(),
+                    Err(error) => this.error = Some(error.to_string().into()),
+                }
+                cx.notify();
+            },
+        );
     }
     fn open_workspace(&mut self, cx: &mut Context<Self>) {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Hexlora Workspace", &["hexlora-workspace"])
-            .pick_file()
-        else {
-            return;
-        };
-        self.load_workspace(path, cx);
+        self.prompt_path(
+            rfd::AsyncFileDialog::new().add_filter("Hexlora Workspace", &["hexlora-workspace"]),
+            DialogKind::File,
+            cx,
+            |this, path, cx| this.load_workspace(path, cx),
+        );
     }
     fn open_policy(&mut self, cx: &mut Context<Self>) {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Hexlora Policy", &["json"])
-            .pick_file()
-        else {
-            return;
-        };
-        match std::fs::read(&path)
-            .map_err(|error| error.to_string())
-            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| error.to_string()))
-        {
-            Ok(policy) => {
-                self.policy = Some(Arc::new(policy));
-                self.policy_path = Some(path.clone());
-                self.tab = InspectorTab::Policy;
-                self.status = format!("Policy loaded from {}", path.display()).into();
-            }
-            Err(error) => self.error = Some(format!("Could not load policy: {error}").into()),
-        }
-        cx.notify();
+        self.prompt_path(
+            rfd::AsyncFileDialog::new().add_filter("Hexlora Policy", &["json"]),
+            DialogKind::File,
+            cx,
+            |this, path, cx| {
+                match std::fs::read(&path)
+                    .map_err(|error| error.to_string())
+                    .and_then(|bytes| {
+                        serde_json::from_slice(&bytes).map_err(|error| error.to_string())
+                    }) {
+                    Ok(policy) => {
+                        this.policy = Some(Arc::new(policy));
+                        this.policy_path = Some(path.clone());
+                        this.tab = InspectorTab::Policy;
+                        this.status = format!("Policy loaded from {}", path.display()).into();
+                    }
+                    Err(error) => {
+                        this.error = Some(format!("Could not load policy: {error}").into())
+                    }
+                }
+                cx.notify();
+            },
+        );
     }
     fn policy_violations(&self) -> Vec<PolicyViolation> {
         let Some(policy) = self.policy.as_deref() else {
@@ -1972,32 +2020,35 @@ impl HexloraApp {
             AnalysisReportFormat::Markdown => ("hexlora-analysis.md", "Markdown", &["md"][..]),
             AnalysisReportFormat::Pdf => ("hexlora-analysis.pdf", "PDF", &["pdf"][..]),
         };
-        let Some(destination) = rfd::FileDialog::new()
-            .set_title(format!("Export Hexlora {label} Report"))
-            .set_file_name(file_name)
-            .add_filter(format!("{label} report"), extensions)
-            .save_file()
-        else {
-            return;
-        };
         let document = self.analysis_report_document(root);
         let bytes = match format {
             AnalysisReportFormat::Markdown => render_analysis_markdown(&document).into_bytes(),
             AnalysisReportFormat::Pdf => render_analysis_pdf(&document),
         };
-        match std::fs::write(&destination, bytes) {
-            Ok(()) => {
-                self.status = format!(
-                    "{label} analysis report exported · {}",
-                    destination.display()
-                )
-                .into()
-            }
-            Err(error) => {
-                self.error = Some(format!("Could not export {label} report: {error}").into())
-            }
-        }
-        cx.notify();
+        self.prompt_path(
+            rfd::AsyncFileDialog::new()
+                .set_title(format!("Export Hexlora {label} Report"))
+                .set_file_name(file_name)
+                .add_filter(format!("{label} report"), extensions),
+            DialogKind::Save,
+            cx,
+            move |this, destination, cx| {
+                match std::fs::write(&destination, bytes) {
+                    Ok(()) => {
+                        this.status = format!(
+                            "{label} analysis report exported · {}",
+                            destination.display()
+                        )
+                        .into()
+                    }
+                    Err(error) => {
+                        this.error =
+                            Some(format!("Could not export {label} report: {error}").into())
+                    }
+                }
+                cx.notify();
+            },
+        );
     }
 
     fn analysis_report_document(&self, root: &ArtifactNode) -> ReportDocument {
@@ -2327,37 +2378,45 @@ impl HexloraApp {
             cx.notify();
             return;
         };
-        let destination = rfd::FileDialog::new()
-            .set_title("Export Hexlora Visual Report")
-            .set_file_name("hexlora-visual-report.svg")
-            .add_filter("Scalable Vector Graphic", &["svg"])
-            .save_file();
-        let Some(destination) = destination else {
-            return;
-        };
         let findings = self
             .current_analysis()
             .map(|analysis| analysis.findings.as_slice())
             .unwrap_or(&[]);
         let report = visual_report_svg(root, findings);
-        match std::fs::write(&destination, report) {
-            Ok(()) => {
-                self.status = format!("Visual report exported · {}", destination.display()).into()
-            }
-            Err(error) => self.error = Some(format!("Could not export report: {error}").into()),
-        }
-        cx.notify();
+        self.prompt_path(
+            rfd::AsyncFileDialog::new()
+                .set_title("Export Hexlora Visual Report")
+                .set_file_name("hexlora-visual-report.svg")
+                .add_filter("Scalable Vector Graphic", &["svg"]),
+            DialogKind::Save,
+            cx,
+            move |this, destination, cx| {
+                match std::fs::write(&destination, report) {
+                    Ok(()) => {
+                        this.status =
+                            format!("Visual report exported · {}", destination.display()).into()
+                    }
+                    Err(error) => {
+                        this.error = Some(format!("Could not export report: {error}").into())
+                    }
+                }
+                cx.notify();
+            },
+        );
     }
 
     fn capture_window_screenshot(&mut self, cx: &mut Context<Self>) {
-        let destination = rfd::FileDialog::new()
-            .set_title("Save Hexlora Window Screenshot")
-            .set_file_name("hexlora-window.png")
-            .add_filter("PNG image", &["png"])
-            .save_file();
-        let Some(destination) = destination else {
-            return;
-        };
+        self.prompt_path(
+            rfd::AsyncFileDialog::new()
+                .set_title("Save Hexlora Window Screenshot")
+                .set_file_name("hexlora-window.png")
+                .add_filter("PNG image", &["png"]),
+            DialogKind::Save,
+            cx,
+            |this, destination, cx| this.capture_window_to(destination, cx),
+        );
+    }
+    fn capture_window_to(&mut self, destination: PathBuf, cx: &mut Context<Self>) {
         self.status = "Choose the Hexlora window to capture…".into();
         cx.notify();
         cx.spawn(async move |this, cx| {
