@@ -8,14 +8,14 @@ if (-not $Version) { throw "Could not read workspace version" }
 
 Push-Location $ProjectRoot
 try {
-    cargo build --release --locked -p bytetrawl -p bytetrawl-cli
+    cargo build --release --locked -p hexlora -p hexlora-cli
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 
     New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-    $StageDir = Join-Path $OutputDir "ByteTrawl-$Version-windows-x64"
+    $StageDir = Join-Path $OutputDir "Hexlora-$Version-windows-x64"
     if (Test-Path $StageDir) { Remove-Item -Recurse -Force $StageDir }
     New-Item -ItemType Directory -Force -Path $StageDir | Out-Null
-    Copy-Item target/release/ByteTrawl.exe, target/release/bytetrawl-cli.exe, LICENSE, README.md $StageDir
+    Copy-Item target/release/Hexlora.exe, target/release/hexlora-cli.exe, LICENSE, README.md $StageDir
 
     $ZipPath = "$StageDir.zip"
     if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
@@ -32,12 +32,12 @@ try {
         throw "WiX Toolset 3 (candle.exe and light.exe) is required"
     }
 
-    $WixObject = Join-Path $OutputDir "bytetrawl.wixobj"
+    $WixObject = Join-Path $OutputDir "hexlora.wixobj"
     & $Candle.Source -nologo -arch x64 "-dSourceDir=$StageDir" "-dProductVersion=$Version" `
-        -out $WixObject packaging/windows/bytetrawl.wxs
+        -out $WixObject packaging/windows/hexlora.wxs
     if ($LASTEXITCODE -ne 0) { throw "WiX candle failed" }
 
-    $MsiPath = Join-Path $OutputDir "ByteTrawl-$Version-windows-x64.msi"
+    $MsiPath = Join-Path $OutputDir "Hexlora-$Version-windows-x64.msi"
     & $Light.Source -nologo -sice:ICE61 -out $MsiPath $WixObject
     if ($LASTEXITCODE -ne 0) { throw "WiX light failed" }
 

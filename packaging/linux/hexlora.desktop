@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Hexlora
+Comment=Inspect application packages and binary files
+Exec=hexlora %F
+Icon=hexlora
+Terminal=false
+Categories=Development;Utility;
+MimeType=application/octet-stream;
+StartupNotify=true

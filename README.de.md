@@ -1,11 +1,11 @@
-# ByteTrawl
+# Hexlora
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md) · **Deutsch**
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#voraussetzungen)
 [![Lizenz](https://img.shields.io/badge/license-Apache--2.0-d7d3c6?style=flat-square)](LICENSE)
 
-ByteTrawl ist eine in Rust geschriebene, plattformübergreifende Workbench zur sicheren statischen Triage, zum Vergleich und zum Release-Audit von Software-Artefakten. Anwendungen, Verzeichnisse, Pakete und einzelne Dateien werden als Artifacts modelliert, damit Struktur, Metadaten, Signaturen, Abhängigkeiten sowie PE-, Mach-O- und ELF-Binärdateien untersucht werden können, ohne den Inhalt auszuführen.
+Hexlora ist eine in Rust geschriebene, plattformübergreifende Workbench zur sicheren statischen Triage, zum Vergleich und zum Release-Audit von Software-Artefakten. Anwendungen, Verzeichnisse, Pakete und einzelne Dateien werden als Artifacts modelliert, damit Struktur, Metadaten, Signaturen, Abhängigkeiten sowie PE-, Mach-O- und ELF-Binärdateien untersucht werden können, ohne den Inhalt auszuführen.
 
 Die Desktop-App bietet Size Lab und interaktive Treemaps, Entropie-Flächendiagramm und Heatmap mit Hex-Navigation, einen Canvas-Abhängigkeitsgraphen, Signatur-/Provisioning-Zeitachsen, IPA-Architektur-/Datenschutzmatrix, Findings-Filter, gespeicherte Panelbreiten, hohen Kontrast sowie lokalen SVG- und Fensterbildexport.
 
@@ -13,20 +13,20 @@ Die englische [README](README.md#detailed-support-matrix) ist die maßgebliche Q
 
 ## Screenshots
 
-[![ByteTrawl untersucht GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/bytetrawl/#gallery)
+[![Hexlora untersucht GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
-Die [Live-Galerie](https://xnu.app/bytetrawl/#gallery) wechselt zwischen Anwendungsstruktur, Mach-O-Details, Abhängigkeiten, extrahierten Strings und begrenzter Hex-Ansicht.
+Die [Live-Galerie](https://xnu.app/hexlora/#gallery) wechselt zwischen Anwendungsstruktur, Mach-O-Details, Abhängigkeiten, extrahierten Strings und begrenzter Hex-Ansicht.
 
 ## Installation mit Homebrew
 
 ```sh
-brew install --cask everettjf/tap/bytetrawl
+brew install --cask everettjf/tap/hexlora
 ```
 
 Optionales Kommandozeilenwerkzeug:
 
 ```sh
-brew install everettjf/tap/bytetrawl-cli
+brew install everettjf/tap/hexlora-cli
 ```
 
 Die macOS-App ist mit einer Developer ID signiert, von Apple notarisiert und mit dem Notarisierungsticket versehen. Jedes Release besteht strikte Signaturprüfung, Ticketvalidierung und Gatekeeper-Bewertung.
@@ -58,9 +58,9 @@ Kurzbefehle: `⌘N` neues Fenster, `⌘O` Datei, `⇧⌘O` Ordner, `⌥⌘O` Wor
 ## CLI
 
 ```sh
-bytetrawl-cli inspect ./SomeApp.app --pretty
-bytetrawl-cli inspect ./MyApp.ipa --depth deep --format sarif --output bytetrawl.sarif
-bytetrawl-cli inspect ./package --hash sha256 --strings --entropy
+hexlora-cli inspect ./SomeApp.app --pretty
+hexlora-cli inspect ./MyApp.ipa --depth deep --format sarif --output hexlora.sarif
+hexlora-cli inspect ./package --hash sha256 --strings --entropy
 ```
 
 Analysetiefen sind `lightweight`, `standard` und `deep`. Exit-Codes unterscheiden fatale Fehler (`1`), Policy-/Finding-Fehler (`2`), Abbruch (`4`) und nutzbare Teilberichte (`5`).
@@ -75,7 +75,7 @@ Der Kern ist unabhängig von GPUI und untersucht Windows PE und Linux ELF statis
 
 ## Sicherheitsgrenzen
 
-ByteTrawl arbeitet statisch und schreibgeschützt. Es führt importierte Programme nicht aus, mountet keine Images, installiert keine Pakete, extrahiert Archive nicht automatisch, dekompiliert und debuggt nicht und verändert keine Bytes. Symbolischen Links wird nicht gefolgt; Eingaben, Rekursion, Dateizahl, Strings, Archiveinträge und Befehlsausgaben sind explizit begrenzt. Heuristische Findings sind Hinweise, keine Malware-Urteile.
+Hexlora arbeitet statisch und schreibgeschützt. Es führt importierte Programme nicht aus, mountet keine Images, installiert keine Pakete, extrahiert Archive nicht automatisch, dekompiliert und debuggt nicht und verändert keine Bytes. Symbolischen Links wird nicht gefolgt; Eingaben, Rekursion, Dateizahl, Strings, Archiveinträge und Befehlsausgaben sind explizit begrenzt. Heuristische Findings sind Hinweise, keine Malware-Urteile.
 
 ## Automatisierte Qualitätssicherung
 
@@ -83,6 +83,6 @@ Neben dem vollständigen Rust-Workspace, Clippy, Rust 1.88 als MSRV, CLI-/Report
 
 ## Dokumentation
 
-[Produktstrategie](docs/product-strategy.md) · [Produkt- und Wettbewerbsanalyse](docs/product-analysis-roadmap.md) · [IPAView-Plan](docs/ipa-convergence-plan.md) · [Testmatrix](docs/testing.md) · [Website](https://xnu.app/bytetrawl/)
+[Produktstrategie](docs/product-strategy.md) · [Produkt- und Wettbewerbsanalyse](docs/product-analysis-roadmap.md) · [IPAView-Plan](docs/ipa-convergence-plan.md) · [Testmatrix](docs/testing.md) · [Website](https://xnu.app/hexlora/)
 
 Die englische README ist maßgeblich; Übersetzungen werden bei Änderungen an Version, Installation oder Hauptfunktionen synchronisiert.

@@ -1,6 +1,6 @@
-# ByteTrawl report and policy schema
+# Hexlora report and policy schema
 
-ByteTrawl emits deterministic, versioned reports. Additive fields may appear within a schema
+Hexlora emits deterministic, versioned reports. Additive fields may appear within a schema
 version; consumers should ignore unknown fields. A removed field or changed meaning requires a
 new major schema version.
 
@@ -41,7 +41,7 @@ suppression requires a reason and may provide an RFC 3339 `expires_at` timestamp
 suppressions do not apply.
 
 See [`examples/policies/store-release.json`](../examples/policies/store-release.json) for all
-cross-platform gates and [`examples/github-actions/bytetrawl-audit.yml`](../examples/github-actions/bytetrawl-audit.yml)
+cross-platform gates and [`examples/github-actions/hexlora-audit.yml`](../examples/github-actions/hexlora-audit.yml)
 for CI integration.
 
 ## Compatibility

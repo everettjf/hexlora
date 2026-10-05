@@ -1,36 +1,36 @@
-# ByteTrawl
+# Hexlora
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md) · [Deutsch](README.de.md)
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#requirements)
 [![License](https://img.shields.io/badge/license-Apache--2.0-d7d3c6?style=flat-square)](LICENSE)
 
-ByteTrawl is a cross-platform, static application and binary inspection workbench written in Rust. It treats applications, directories, packages, and individual files as logical Artifacts, then presents their structure and PE, Mach-O, or ELF details through one host-independent analysis model.
+Hexlora is a cross-platform, static application and binary inspection workbench written in Rust. It treats applications, directories, packages, and individual files as logical Artifacts, then presents their structure and PE, Mach-O, or ELF details through one host-independent analysis model.
 
 English is the canonical README. Localized editions cover installation, major capabilities, safety boundaries, and documentation links; consult this edition for the most detailed and current support matrix.
 
 ## Screenshots
 
-[![ByteTrawl inspecting GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/bytetrawl/#gallery)
+[![Hexlora inspecting GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
-The live [ByteTrawl gallery](https://xnu.app/bytetrawl/#gallery) rotates through application structure, Mach-O details, dependency resolution, extracted strings, and bounded hex inspection. The screenshots were captured from ByteTrawl while statically inspecting `/Applications/GrapeCompare.app`.
+The live [Hexlora gallery](https://xnu.app/hexlora/#gallery) rotates through application structure, Mach-O details, dependency resolution, extracted strings, and bounded hex inspection. The screenshots were captured from Hexlora while statically inspecting `/Applications/GrapeCompare.app`.
 
 ## Install with Homebrew
 
 ```sh
-brew install --cask everettjf/tap/bytetrawl
+brew install --cask everettjf/tap/hexlora
 ```
 
 Optional command-line tool:
 
 ```sh
-brew install everettjf/tap/bytetrawl-cli
+brew install everettjf/tap/hexlora-cli
 ```
 
 Verify the CLI installation:
 
 ```sh
-bytetrawl-cli --version
+hexlora-cli --version
 ```
 
 The app bundle is Developer ID signed, Apple-notarized, and ships with a stapled notarization ticket so Gatekeeper can verify it without contacting Apple.
@@ -54,43 +54,43 @@ The UI ships with a warm terminal-style dark theme derived from the semantic pal
 ## Build and run on macOS
 
 ```sh
-cargo run -p bytetrawl
+cargo run -p hexlora
 ```
 
 Build a launchable macOS application bundle:
 
 ```sh
 sh scripts/build-macos-app.sh
-open dist/ByteTrawl.app
+open dist/Hexlora.app
 ```
 
 Use **File → Open Folder** for an application bundle or directory, and **File → Open File** for a package, executable, library, metadata file, or other binary. Files and folders can also be dragged directly into the center of the window.
 
 ## CLI
 
-`bytetrawl-cli` is an independent executable; the desktop application remains GUI-only. It writes a versioned JSON report to stdout by default, keeping diagnostics on stderr so it can be used safely in scripts.
+`hexlora-cli` is an independent executable; the desktop application remains GUI-only. It writes a versioned JSON report to stdout by default, keeping diagnostics on stderr so it can be used safely in scripts.
 
 ```sh
-cargo run -p bytetrawl-cli -- inspect ./SomeApp.app --pretty
-cargo run -p bytetrawl-cli -- inspect ./app.exe --depth deep --output report.json
-cargo run -p bytetrawl-cli -- inspect ./package --hash sha256 --strings --entropy
+cargo run -p hexlora-cli -- inspect ./SomeApp.app --pretty
+cargo run -p hexlora-cli -- inspect ./app.exe --depth deep --output report.json
+cargo run -p hexlora-cli -- inspect ./package --hash sha256 --strings --entropy
 ```
 
 ### Release policies and CI
 
-ByteTrawl can apply the same versioned release policy to IPA, APK, APPX/MSIX,
+Hexlora can apply the same versioned release policy to IPA, APK, APPX/MSIX,
 DEB, generic artifacts, and comparisons. Policies support built-in profiles
 (`balanced`, `strict`, and `store_release`), explicit rule allow/deny lists,
 severity overrides, and documented suppressions with optional expiry dates.
 
 ```bash
-bytetrawl-cli inspect MyApp.ipa --depth deep \
+hexlora-cli inspect MyApp.ipa --depth deep \
   --policy examples/policies/store-release.json \
-  --format sarif --output bytetrawl.sarif
+  --format sarif --output hexlora.sarif
 ```
 
 Use [the store-release policy](examples/policies/store-release.json) as a
-starting point. [The GitHub Actions example](examples/github-actions/bytetrawl-audit.yml)
+starting point. [The GitHub Actions example](examples/github-actions/hexlora-audit.yml)
 shows policy enforcement, SARIF upload, and report retention. A policy failure
 returns exit status `2`; incomplete analysis and cancellation have distinct
 non-zero statuses.
@@ -99,11 +99,11 @@ Expensive work is opt-in. `--depth standard` performs structural analysis; `--de
 
 Exit codes are `0` for a complete report, `1` for a fatal error, `2` when `--fail-on` reaches the requested finding severity, `4` when cancelled, and `5` for a usable but partial report. Output files are written atomically.
 
-Release binaries and Homebrew metadata are available from [GitHub Releases](https://github.com/everettjf/homebrew-tap/releases) and through the Homebrew commands above, while the source repository remains private.
+Release binaries and Homebrew metadata are available from [GitHub Releases](https://github.com/everettjf/homebrew-tap/releases) and through the Homebrew commands above, while the source repository is public.
 
 ## Product direction
 
-ByteTrawl is being developed as a **safe static triage, comparison, and release-audit workbench for cross-platform software artifacts**. The canonical [product strategy and roadmap](docs/product-strategy.md) defines its users, principles, architecture, milestones, quality gates, and non-goals. The supporting [current-state and competitor analysis](docs/product-analysis-roadmap.md) and [IPAView convergence plan](docs/ipa-convergence-plan.md) provide the research and platform-specific execution detail.
+Hexlora is being developed as a **safe static triage, comparison, and release-audit workbench for cross-platform software artifacts**. The canonical [product strategy and roadmap](docs/product-strategy.md) defines its users, principles, architecture, milestones, quality gates, and non-goals. The supporting [current-state and competitor analysis](docs/product-analysis-roadmap.md) and [IPAView convergence plan](docs/ipa-convergence-plan.md) provide the research and platform-specific execution detail.
 
 ## Desktop workflow
 
@@ -112,7 +112,7 @@ ByteTrawl is being developed as a **safe static triage, comparison, and release-
 - Drag a file, application, package, workspace, or directory into the center to open it.
 - Resizable Artifact Tree, inspector, and Details regions with virtualized tables for large inputs.
 - Three saved workbench presets: **Standard**, **Focus**, and **Analysis**. Sidebar/inspector visibility and user-resized widths persist across launches, while each `File → New Window` session keeps independent artifact and navigation state.
-- Optional high-contrast appearance, a prominent **Export Report** menu for comprehensive English Markdown/PDF analysis reports, a shareable SVG visual dashboard, and native interactive window screenshot capture. Exports stay local; Markdown and every PDF page end with **Powered by ByteTrawl** branding.
+- Optional high-contrast appearance, a prominent **Export Report** menu for comprehensive English Markdown/PDF analysis reports, a shareable SVG visual dashboard, and native interactive window screenshot capture. Exports stay local; Markdown and every PDF page end with **Powered by Hexlora** branding.
 - A compact **External Tools…** menu shows compatible installed integrations first, distinguishes GUI launchers from captured command-line tools, and summarizes unavailable integrations without filling the Details pane with disabled buttons.
 - Workspaces preserve the artifact path, selected view, bookmarks, notes, and cached analysis results.
 - **File → Open Release Policy…** applies the same versioned IPA, Android, Windows,
@@ -124,7 +124,7 @@ ByteTrawl is being developed as a **safe static triage, comparison, and release-
 - Logical Artifact Tree groups executables, frameworks, libraries, plugins, resources, metadata, packages, archives, and disk images independently of their physical paths.
 - The Artifact Tree, global results, Strings, symbols, dependencies, graph edges, sections, segments, and relocation tables use GPUI virtual rendering, so large artifacts instantiate only rows inside the current viewport.
 - A host-independent `BinaryAnalyzer` interface dispatches to concrete `PeAnalyzer`, `MachOAnalyzer`, and `ElfAnalyzer` implementations. Unified PE, Mach-O, Universal Mach-O, and ELF results expose headers, sections, imports, exports, symbols, dependencies, signatures, metadata, entropy, and inspection findings without leaking parser-specific types into the UI.
-- Binary containers and ar libraries are parsed with `goblin`; PE embedded signatures with `authenticode`; Apple UDIF/DMG containers with `udif`; Apple XAR/flat PKG containers with `apple-xar`; tar streams with `tar`; XML with `quick-xml`; plists with `plist`; ZIP central directories with `zip`; file mapping with `memmap2`; and digests with the RustCrypto hash crates. ByteTrawl's own code focuses on the Artifact model, safe limits, normalization, orchestration, and UI.
+- Binary containers and ar libraries are parsed with `goblin`; PE embedded signatures with `authenticode`; Apple UDIF/DMG containers with `udif`; Apple XAR/flat PKG containers with `apple-xar`; tar streams with `tar`; XML with `quick-xml`; plists with `plist`; ZIP central directories with `zip`; file mapping with `memmap2`; and digests with the RustCrypto hash crates. Hexlora's own code focuses on the Artifact model, safe limits, normalization, orchestration, and UI.
 - Universal Mach-O slices are parsed independently and selectable from the **Slices** tab.
 - Artifact-wide dependencies are built lazily into a cancellable **Dependency Graph** with a visual source-to-target map plus a precision table, source architecture, bundled/system/missing/unknown resolution, and resolved target paths.
 - Strings include ASCII, UTF-8, UTF-16LE, UTF-16BE, file offsets, section names, and virtual addresses where mapping information exists.
@@ -149,7 +149,7 @@ Keyboard shortcuts on macOS: `⌘N` opens a new window, `⌘O` opens a file, `�
 
 ## Detailed support matrix
 
-ByteTrawl separates three levels of support: **audit** means platform-aware release semantics and findings; **inspect** means bounded structural parsing and navigation; **identify** means reliable type recognition with the universal metadata, search, strings, hash, entropy, and Hex workflows still available.
+Hexlora separates three levels of support: **audit** means platform-aware release semantics and findings; **inspect** means bounded structural parsing and navigation; **identify** means reliable type recognition with the universal metadata, search, strings, hash, entropy, and Hex workflows still available.
 
 ### Applications and release packages
 
@@ -224,7 +224,7 @@ ByteTrawl separates three levels of support: **audit** means platform-aware rele
 | Search | Artifact-wide search across names, metadata, symbols and strings, plus direct hexadecimal byte queries |
 | Workspaces | Artifact path, selected node/view, bookmarks, notes, tool configuration and cached analysis snapshot |
 | External tools | Explicit launch of compatible GUI tools; bounded, cancellable captured output for supported command-line tools; installed tools are prioritized |
-| Report export | Comprehensive local English Markdown/PDF reports containing artifact summary, complete inventory, analysis coverage, cached binary/hash/entropy details, strings, dependency graph, signatures, platform audits, policy results, comparison data, bookmarks and notes; uncomputed optional dimensions are identified explicitly; every export carries Powered by ByteTrawl branding |
+| Report export | Comprehensive local English Markdown/PDF reports containing artifact summary, complete inventory, analysis coverage, cached binary/hash/entropy details, strings, dependency graph, signatures, platform audits, policy results, comparison data, bookmarks and notes; uncomputed optional dimensions are identified explicitly; every export carries Powered by Hexlora branding |
 | Visual reports | Local, shareable SVG dashboard with artifact metrics, finding counts and file-type composition, plus native window screenshot capture; no artifact bytes are uploaded |
 
 ### CLI, reports and CI
@@ -238,7 +238,7 @@ ByteTrawl separates three levels of support: **audit** means platform-aware rele
 
 ### Deliberate boundaries
 
-ByteTrawl is a static, read-only workbench. It does not execute imported programs, mount images, install packages, automatically extract archives, disassemble into assembly listings, decompile code, debug processes, patch bytes, or claim that a heuristic finding proves malware. Windows and Linux binaries are inspection targets today; the distributed desktop host remains Apple-silicon macOS 13 or later. MSI, RPM, AAB/XAPK, 7z and RAR do not yet have the same platform-semantic audit depth as IPA, APK, MSIX or DEB.
+Hexlora is a static, read-only workbench. It does not execute imported programs, mount images, install packages, automatically extract archives, disassemble into assembly listings, decompile code, debug processes, patch bytes, or claim that a heuristic finding proves malware. Desktop builds are available for Apple-silicon macOS 13 or later, Windows x64, and Linux amd64. MSI, RPM, AAB/XAPK, 7z and RAR do not yet have the same platform-semantic audit depth as IPA, APK, MSIX or DEB.
 
 ## Release verification
 
@@ -258,14 +258,14 @@ See the [corpus provenance and coverage](tests/real-world-corpus/README.md).
 
 ## Safety
 
-Imported artifacts are untrusted input. ByteTrawl performs static inspection and never executes an imported program. External tools are launched only after an explicit user action. High entropy and other findings are indicators, not malware verdicts.
+Imported artifacts are untrusted input. Hexlora performs static inspection and never executes an imported program. External tools are launched only after an explicit user action. High entropy and other findings are indicators, not malware verdicts.
 
 Directory discovery does not follow symbolic links. Parser input, structured metadata, recursion depth, file count, strings, relocation lists, archive entries, captured command output, and displayed rows have explicit limits. ZIP files are inspected through their central directory without extraction, including traversal, symbolic-link, expanded-size, and compression-ratio indicators.
 
 ## Workspace
 
-- `bytetrawl-core`: host-independent Artifact, analysis, finding, signature, and workspace models
-- `bytetrawl-format`: magic detection and unified PE/Mach-O/ELF parsing
-- `bytetrawl-analysis`: discovery, cache, hashing, entropy, strings, and chunked hex access
-- `bytetrawl-tools`: extensible external tool registry
-- `bytetrawl-ui`: GPUI macOS desktop application
+- `hexlora-core`: host-independent Artifact, analysis, finding, signature, and workspace models
+- `hexlora-format`: magic detection and unified PE/Mach-O/ELF parsing
+- `hexlora-analysis`: discovery, cache, hashing, entropy, strings, and chunked hex access
+- `hexlora-tools`: extensible external tool registry
+- `hexlora-ui`: GPUI macOS desktop application

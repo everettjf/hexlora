@@ -1,0 +1,19 @@
+[package]
+name = "hexlora-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hexlora-core = { path = "../hexlora-core" }
+hexlora-ios = { path = "../hexlora-ios" }
+hexlora-compare = { path = "../hexlora-compare" }
+hexlora-android = { path = "../hexlora-android" }
+hexlora-windows = { path = "../hexlora-windows" }
+hexlora-linux = { path = "../hexlora-linux" }
+serde.workspace = true
+chrono.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

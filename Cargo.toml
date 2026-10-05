@@ -1,23 +1,23 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/bytetrawl-core",
-    "crates/bytetrawl-format",
-    "crates/bytetrawl-analysis",
-    "crates/bytetrawl-ios",
-    "crates/bytetrawl-compare",
-    "crates/bytetrawl-policy",
-    "crates/bytetrawl-android",
-    "crates/bytetrawl-windows",
-    "crates/bytetrawl-linux",
-    "crates/bytetrawl-signature",
-    "crates/bytetrawl-tools",
-    "crates/bytetrawl-cli",
-    "crates/bytetrawl-ui",
+    "crates/hexlora-core",
+    "crates/hexlora-format",
+    "crates/hexlora-analysis",
+    "crates/hexlora-ios",
+    "crates/hexlora-compare",
+    "crates/hexlora-policy",
+    "crates/hexlora-android",
+    "crates/hexlora-windows",
+    "crates/hexlora-linux",
+    "crates/hexlora-signature",
+    "crates/hexlora-tools",
+    "crates/hexlora-cli",
+    "crates/hexlora-ui",
 ]
 
 [workspace.package]
-version = "1.1.16"
+version = "1.1.17"
 edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.88"

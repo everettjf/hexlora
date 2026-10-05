@@ -1,4 +1,4 @@
-# ByteTrawl repository instructions
+# Hexlora repository instructions
 
 ## macOS releases
 

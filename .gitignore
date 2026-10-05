@@ -7,10 +7,10 @@
 # macOS metadata
 .DS_Store
 
-# Local ByteTrawl workspaces and default report exports
-*.bytetrawl-workspace
-bytetrawl-analysis.md
-bytetrawl-analysis.pdf
+# Local Hexlora workspaces and default report exports
+*.hexlora-workspace
+hexlora-analysis.md
+hexlora-analysis.pdf
 
 # Local command and test logs
 *.log

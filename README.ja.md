@@ -1,11 +1,11 @@
-# ByteTrawl
+# Hexlora
 
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語** · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md) · [Deutsch](README.de.md)
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#動作要件)
 [![License](https://img.shields.io/badge/license-Apache--2.0-d7d3c6?style=flat-square)](LICENSE)
 
-ByteTrawl は Rust で実装された、クロスプラットフォームのソフトウェア成果物向け静的トリアージ・比較・リリース監査ワークベンチです。アプリ、ディレクトリ、パッケージ、単体ファイルを Artifact として統一的に扱い、対象を実行せずに構造、メタデータ、署名、依存関係、PE／Mach-O／ELF を検査します。
+Hexlora は Rust で実装された、クロスプラットフォームのソフトウェア成果物向け静的トリアージ・比較・リリース監査ワークベンチです。アプリ、ディレクトリ、パッケージ、単体ファイルを Artifact として統一的に扱い、対象を実行せずに構造、メタデータ、署名、依存関係、PE／Mach-O／ELF を検査します。
 
 最新のデスクトップ機能には、Size Lab とインタラクティブな treemap、Entropy Area Chart／ヒートマップから Hex への移動、Canvas 依存ノードグラフ、署名／Provisioning タイムライン、IPA のアーキテクチャ／プライバシーマトリクス、Findings フィルター、保存可能なパネル幅、高コントラスト表示、ローカル SVG レポートとウィンドウ画像出力があります。
 
@@ -13,20 +13,20 @@ ByteTrawl は Rust で実装された、クロスプラットフォームのソ�
 
 ## スクリーンショット
 
-[![GrapeCompare.app を検査する ByteTrawl](docs/assets/screenshots/overview.jpg)](https://xnu.app/bytetrawl/#gallery)
+[![GrapeCompare.app を検査する Hexlora](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
-[ライブギャラリー](https://xnu.app/bytetrawl/#gallery)では、アプリ構造、Mach-O、依存関係、抽出文字列、範囲限定 Hex ビューを切り替えて確認できます。
+[ライブギャラリー](https://xnu.app/hexlora/#gallery)では、アプリ構造、Mach-O、依存関係、抽出文字列、範囲限定 Hex ビューを切り替えて確認できます。
 
 ## Homebrew でインストール
 
 ```sh
-brew install --cask everettjf/tap/bytetrawl
+brew install --cask everettjf/tap/hexlora
 ```
 
 コマンドラインツール（任意）：
 
 ```sh
-brew install everettjf/tap/bytetrawl-cli
+brew install everettjf/tap/hexlora-cli
 ```
 
 macOS アプリは Developer ID で署名され、Apple の公証とチケットの stapling が完了しています。リリース成果物は厳格な署名検証、公証チケット検証、Gatekeeper 評価を通過します。
@@ -58,9 +58,9 @@ macOS アプリは Developer ID で署名され、Apple の公証とチケット
 ## CLI
 
 ```sh
-bytetrawl-cli inspect ./SomeApp.app --pretty
-bytetrawl-cli inspect ./MyApp.ipa --depth deep --format sarif --output bytetrawl.sarif
-bytetrawl-cli inspect ./package --hash sha256 --strings --entropy
+hexlora-cli inspect ./SomeApp.app --pretty
+hexlora-cli inspect ./MyApp.ipa --depth deep --format sarif --output hexlora.sarif
+hexlora-cli inspect ./package --hash sha256 --strings --entropy
 ```
 
 解析深度は `lightweight`、`standard`、`deep`。終了コードは fatal error（`1`）、policy/finding failure（`2`）、cancel（`4`）、利用可能な partial report（`5`）を区別します。
@@ -75,7 +75,7 @@ bytetrawl-cli inspect ./package --hash sha256 --strings --entropy
 
 ## 安全境界
 
-ByteTrawl は読み取り専用の静的ツールです。取り込んだプログラムの実行、イメージのマウント、パッケージのインストール、自動展開、逆コンパイル、デバッグ、バイト変更は行いません。シンボリックリンクを追跡せず、入力、再帰、ファイル数、文字列、archive members、外部コマンド出力には明示的な上限があります。ヒューリスティックな finding は調査の手掛かりであり、マルウェア判定ではありません。
+Hexlora は読み取り専用の静的ツールです。取り込んだプログラムの実行、イメージのマウント、パッケージのインストール、自動展開、逆コンパイル、デバッグ、バイト変更は行いません。シンボリックリンクを追跡せず、入力、再帰、ファイル数、文字列、archive members、外部コマンド出力には明示的な上限があります。ヒューリスティックな finding は調査の手掛かりであり、マルウェア判定ではありません。
 
 ## 自動品質保証
 
@@ -83,6 +83,6 @@ Rust workspace 全体、Clippy、Rust 1.88 の MSRV、CLI/レポート契約、m
 
 ## ドキュメント
 
-[製品戦略](docs/product-strategy.md) · [現状・競合分析](docs/product-analysis-roadmap.md) · [IPAView 統合計画](docs/ipa-convergence-plan.md) · [テストマトリクス](docs/testing.md) · [Web サイト](https://xnu.app/bytetrawl/)
+[製品戦略](docs/product-strategy.md) · [現状・競合分析](docs/product-analysis-roadmap.md) · [IPAView 統合計画](docs/ipa-convergence-plan.md) · [テストマトリクス](docs/testing.md) · [Web サイト](https://xnu.app/hexlora/)
 
 英語 README が正規版です。バージョン、インストール方法、主要機能の変更時には翻訳版も同期します。

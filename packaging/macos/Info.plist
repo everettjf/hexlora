@@ -3,24 +3,24 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
-  <key>CFBundleExecutable</key><string>ByteTrawl</string>
-  <key>CFBundleIdentifier</key><string>com.bytetrawl.app</string>
+  <key>CFBundleExecutable</key><string>Hexlora</string>
+  <key>CFBundleIdentifier</key><string>com.hexlora.app</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>ByteTrawl</string>
-  <key>CFBundleDisplayName</key><string>ByteTrawl</string>
-  <key>CFBundleIconFile</key><string>ByteTrawl.icns</string>
-  <key>CFBundleIconName</key><string>ByteTrawl</string>
+  <key>CFBundleName</key><string>Hexlora</string>
+  <key>CFBundleDisplayName</key><string>Hexlora</string>
+  <key>CFBundleIconFile</key><string>Hexlora.icns</string>
+  <key>CFBundleIconName</key><string>Hexlora</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.1.11</string>
-  <key>CFBundleVersion</key><string>1.1.11</string>
+  <key>CFBundleShortVersionString</key><string>1.1.17</string>
+  <key>CFBundleVersion</key><string>1.1.17</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>
-      <key>CFBundleTypeName</key><string>ByteTrawl Workspace</string>
-      <key>CFBundleTypeExtensions</key><array><string>bytetrawl-workspace</string></array>
+      <key>CFBundleTypeName</key><string>Hexlora Workspace</string>
+      <key>CFBundleTypeExtensions</key><array><string>hexlora-workspace</string></array>
       <key>CFBundleTypeRole</key><string>Editor</string>
     </dict>
   </array>

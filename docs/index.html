@@ -3,25 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ByteTrawl — Static triage, comparison &amp; release audit</title>
+  <title>Hexlora — Static triage, comparison &amp; release audit</title>
   <meta name="description" content="A native workbench for safe static triage, comparison, and release auditing across applications, packages, archives, and binaries.">
   <meta name="theme-color" content="#0e0d0b">
-  <meta property="og:title" content="ByteTrawl">
+  <meta property="og:title" content="Hexlora">
   <meta property="og:description" content="Safe static triage, comparison, and release auditing for cross-platform software artifacts.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://xnu.app/bytetrawl/">
-  <meta property="og:image" content="https://xnu.app/bytetrawl/assets/og.png">
+  <meta property="og:url" content="https://xnu.app/hexlora/">
+  <meta property="og:image" content="https://xnu.app/hexlora/assets/og.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ByteTrawl">
+  <meta name="twitter:title" content="Hexlora">
   <meta name="twitter:description" content="Safe static triage, comparison, and release auditing for cross-platform software artifacts.">
-  <meta name="twitter:image" content="https://xnu.app/bytetrawl/assets/og.png">
+  <meta name="twitter:image" content="https://xnu.app/hexlora/assets/og.png">
   <link rel="icon" type="image/png" sizes="64x64" href="assets/icons/favicon-64.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="nav">
-    <a class="brand" href="#top" aria-label="ByteTrawl home"><img class="brand-icon" src="assets/icons/apple-touch-icon.png" alt=""><span>ByteTrawl</span></a>
+    <a class="brand" href="#top" aria-label="Hexlora home"><img class="brand-icon" src="assets/icons/apple-touch-icon.png" alt=""><span>Hexlora</span></a>
     <nav aria-label="Primary navigation">
       <a href="#inspect">Inspect</a>
       <a href="#capabilities">Capabilities</a>
@@ -29,7 +29,7 @@
       <a href="#safety">Safety</a>
       <a href="#quality">Quality</a>
       <a href="#install">Install</a>
-      <a class="nav-release" href="https://github.com/everettjf/bytetrawl/releases/latest">Downloads ↗</a>
+      <a class="nav-release" href="https://github.com/everettjf/hexlora/releases/latest">Downloads ↗</a>
     </nav>
   </header>
 
@@ -40,19 +40,19 @@
         <h1>Know what’s<br><em>inside.</em></h1>
         <p class="lede">A native workbench for safe static triage, release comparison, and platform-aware auditing across applications, packages, archives, disk images, and binaries.</p>
         <div class="actions">
-          <a class="button primary" href="#install">Download ByteTrawl</a>
-          <a class="button" href="https://github.com/everettjf/bytetrawl/releases/latest">Latest release ↗</a>
+          <a class="button primary" href="#install">Download Hexlora</a>
+          <a class="button" href="https://github.com/everettjf/hexlora/releases/latest">Latest release ↗</a>
         </div>
         <p class="micro">macOS Apple silicon · Windows x64 · Linux amd64 · Apache-2.0</p>
       </div>
 
-      <div class="inspector carousel" id="gallery" aria-label="ByteTrawl screenshots" aria-roledescription="carousel">
+      <div class="inspector carousel" id="gallery" aria-label="Hexlora screenshots" aria-roledescription="carousel">
         <div class="slides" aria-live="polite">
-          <figure class="slide active"><img src="assets/screenshots/overview.jpg" alt="ByteTrawl overview of GrapeCompare.app"><figcaption><b>Application overview</b><span>Explore a complete macOS app as a logical artifact tree.</span></figcaption></figure>
-          <figure class="slide"><img src="assets/screenshots/executable.jpg" alt="ByteTrawl Mach-O executable overview" loading="lazy"><figcaption><b>Binary inspection</b><span>See architecture, format, entry point, imports, and exports.</span></figcaption></figure>
-          <figure class="slide"><img src="assets/screenshots/dependencies.jpg" alt="ByteTrawl dependency graph" loading="lazy"><figcaption><b>Dependency graph</b><span>Resolve requested libraries across every architecture.</span></figcaption></figure>
-          <figure class="slide"><img src="assets/screenshots/strings.jpg" alt="ByteTrawl extracted strings view" loading="lazy"><figcaption><b>Mapped strings</b><span>Search extracted content with file and virtual addresses.</span></figcaption></figure>
-          <figure class="slide"><img src="assets/screenshots/hex.jpg" alt="ByteTrawl hexadecimal viewer" loading="lazy"><figcaption><b>Hex windows</b><span>Inspect bounded 4 KiB chunks without loading the whole file.</span></figcaption></figure>
+          <figure class="slide active"><img src="assets/screenshots/overview.jpg" alt="Hexlora overview of GrapeCompare.app"><figcaption><b>Application overview</b><span>Explore a complete macOS app as a logical artifact tree.</span></figcaption></figure>
+          <figure class="slide"><img src="assets/screenshots/executable.jpg" alt="Hexlora Mach-O executable overview" loading="lazy"><figcaption><b>Binary inspection</b><span>See architecture, format, entry point, imports, and exports.</span></figcaption></figure>
+          <figure class="slide"><img src="assets/screenshots/dependencies.jpg" alt="Hexlora dependency graph" loading="lazy"><figcaption><b>Dependency graph</b><span>Resolve requested libraries across every architecture.</span></figcaption></figure>
+          <figure class="slide"><img src="assets/screenshots/strings.jpg" alt="Hexlora extracted strings view" loading="lazy"><figcaption><b>Mapped strings</b><span>Search extracted content with file and virtual addresses.</span></figcaption></figure>
+          <figure class="slide"><img src="assets/screenshots/hex.jpg" alt="Hexlora hexadecimal viewer" loading="lazy"><figcaption><b>Hex windows</b><span>Inspect bounded 4 KiB chunks without loading the whole file.</span></figcaption></figure>
         </div>
         <button class="carousel-arrow previous" type="button" data-previous aria-label="Previous screenshot">←</button>
         <button class="carousel-arrow next" type="button" data-next aria-label="Next screenshot">→</button>
@@ -111,7 +111,7 @@
         </div>
       </div>
 
-      <aside class="boundaries"><b>Deliberate boundary</b><p>ByteTrawl is static and read-only. It does not execute imported software, mount images, install packages, automatically extract archives, decompile, debug, patch bytes, or present heuristic findings as malware verdicts. Desktop builds are available for Apple-silicon macOS 13+, Windows x64, and Linux amd64.</p></aside>
+      <aside class="boundaries"><b>Deliberate boundary</b><p>Hexlora is static and read-only. It does not execute imported software, mount images, install packages, automatically extract archives, decompile, debug, patch bytes, or present heuristic findings as malware verdicts. Desktop builds are available for Apple-silicon macOS 13+, Windows x64, and Linux amd64.</p></aside>
     </section>
 
     <section class="section shell" id="inspect">
@@ -128,7 +128,7 @@
       <div class="shell safety-grid">
         <div><p class="eyebrow">DESIGNED FOR UNTRUSTED INPUT</p><h2>Static by default.<br><em>Bounded by design.</em></h2></div>
         <div class="safety-copy">
-          <p>ByteTrawl does not execute imported programs, mount disk images, or extract archives. Explicit limits cover parser input, recursion, file count, strings, tables, command output, and time.</p>
+          <p>Hexlora does not execute imported programs, mount disk images, or extract archives. Explicit limits cover parser input, recursion, file count, strings, tables, command output, and time.</p>
           <ul><li><span>✓</span> No symlink traversal during discovery</li><li><span>✓</span> Lazy hashing, entropy, strings, and dependency work</li><li><span>✓</span> Cancellable background analysis</li><li><span>✓</span> External tools launch only when requested</li></ul>
         </div>
       </div>
@@ -143,46 +143,46 @@
         <article><strong>1.88</strong><b>verified Rust MSRV</b><p>The declared minimum toolchain is compiled in CI alongside stable tests, Clippy, CLI contracts, and app launch checks.</p></article>
         <article><strong>3×</strong><b>macOS trust verification</b><p>Strict code-signature verification, stapled-ticket validation, and Gatekeeper assessment run on the final archived app and again after Homebrew installation.</p></article>
       </div>
-      <div class="quality-links"><a href="testing.md">Testing matrix ↗</a><a href="https://github.com/everettjf/bytetrawl/releases/latest">All downloads ↗</a></div>
+      <div class="quality-links"><a href="testing.md">Testing matrix ↗</a><a href="https://github.com/everettjf/hexlora/releases/latest">All downloads ↗</a></div>
     </section>
 
     <section class="section install shell" id="install">
-      <div class="install-copy"><p class="eyebrow">GET BYTE TRAWL</p><h2>Choose your<br>platform.</h2><p>Install the native workbench or use a portable archive. Windows and Linux packages are built and verified by GitHub Actions.</p></div>
-      <div class="downloads" aria-label="ByteTrawl downloads">
+      <div class="install-copy"><p class="eyebrow">GET HEXLORA</p><h2>Choose your<br>platform.</h2><p>Install the native workbench or use a portable archive. Windows and Linux packages are built and verified by GitHub Actions.</p></div>
+      <div class="downloads" aria-label="Hexlora downloads">
         <article class="download-platform">
           <div><span>WINDOWS · X64</span><h3>Windows</h3><p>Use the installer for a standard setup, or unzip the portable build and run it directly.</p></div>
           <div class="download-actions">
-            <a class="button primary" href="https://github.com/everettjf/bytetrawl/releases/latest" data-release-asset="-windows-x64.msi">Download MSI</a>
-            <a class="button" href="https://github.com/everettjf/bytetrawl/releases/latest" data-release-asset="-windows-x64.zip">Portable ZIP</a>
+            <a class="button primary" href="https://github.com/everettjf/hexlora/releases/latest" data-release-asset="-windows-x64.msi">Download MSI</a>
+            <a class="button" href="https://github.com/everettjf/hexlora/releases/latest" data-release-asset="-windows-x64.zip">Portable ZIP</a>
           </div>
         </article>
         <article class="download-platform">
           <div><span>LINUX · AMD64</span><h3>Linux</h3><p>Install the Debian package, or extract the portable tarball on another compatible distribution.</p></div>
           <div class="download-actions">
-            <a class="button primary" href="https://github.com/everettjf/bytetrawl/releases/latest" data-release-asset="-linux-amd64.deb">Download DEB</a>
-            <a class="button" href="https://github.com/everettjf/bytetrawl/releases/latest" data-release-asset="-linux-amd64.tar.gz">Portable tar.gz</a>
+            <a class="button primary" href="https://github.com/everettjf/hexlora/releases/latest" data-release-asset="-linux-amd64.deb">Download DEB</a>
+            <a class="button" href="https://github.com/everettjf/hexlora/releases/latest" data-release-asset="-linux-amd64.tar.gz">Portable tar.gz</a>
           </div>
         </article>
         <div class="terminal">
           <div class="terminal-head"><span>macOS · Apple silicon · 13+</span><button type="button" data-copy aria-label="Copy macOS app installation command">Copy</button></div>
-          <pre><code><span>$</span> brew install --cask everettjf/tap/bytetrawl</code></pre>
+          <pre><code><span>$</span> brew install --cask everettjf/tap/hexlora</code></pre>
           <p><b>Verified:</b> Distributed releases are Developer ID signed, Apple-notarized, and include a stapled ticket for offline Gatekeeper verification.</p>
         </div>
         <div class="terminal">
           <div class="terminal-head"><span>Optional · Command-line tool</span><button type="button" data-copy aria-label="Copy CLI installation command">Copy</button></div>
-          <pre><code><span>$</span> brew install everettjf/tap/bytetrawl-cli</code></pre>
+          <pre><code><span>$</span> brew install everettjf/tap/hexlora-cli</code></pre>
         </div>
-        <p class="checksum-link"><a href="https://github.com/everettjf/bytetrawl/releases/latest/download/SHA256SUMS">Verify downloads with SHA256SUMS ↗</a></p>
+        <p class="checksum-link"><a href="https://github.com/everettjf/hexlora/releases/latest/download/SHA256SUMS">Verify downloads with SHA256SUMS ↗</a></p>
       </div>
     </section>
   </main>
 
-  <footer class="shell"><a class="brand" href="#top"><img class="brand-icon" src="assets/icons/apple-touch-icon.png" alt=""><span>ByteTrawl</span></a><p>Static inspection only. Indicators are not malware verdicts.</p><p>© 2026 ByteTrawl · Apache-2.0</p></footer>
+  <footer class="shell"><a class="brand" href="#top"><img class="brand-icon" src="assets/icons/apple-touch-icon.png" alt=""><span>Hexlora</span></a><p>Static inspection only. Indicators are not malware verdicts.</p><p>© 2026 Hexlora · Apache-2.0</p></footer>
   <script>
     // Keep the release page as a working fallback when the API is unavailable.
     async function loadLatestDownloads() {
       try {
-        const response = await fetch('https://api.github.com/repos/everettjf/bytetrawl/releases/latest');
+        const response = await fetch('https://api.github.com/repos/everettjf/hexlora/releases/latest');
         if (!response.ok) return;
         const release = await response.json();
         if (!Array.isArray(release.assets)) return;
@@ -190,7 +190,7 @@
           const asset = release.assets.find((asset) =>
             typeof asset.name === 'string' && asset.name.endsWith(link.dataset.releaseAsset));
           if (asset && typeof asset.browser_download_url === 'string' &&
-              asset.browser_download_url.startsWith('https://github.com/everettjf/bytetrawl/releases/download/')) {
+              asset.browser_download_url.startsWith('https://github.com/everettjf/hexlora/releases/download/')) {
             link.href = asset.browser_download_url;
           }
         });

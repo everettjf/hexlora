@@ -1,11 +1,11 @@
-# ByteTrawl
+# Hexlora
 
 [English](README.md) · **简体中文** · [日本語](README.ja.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md) · [Deutsch](README.de.md)
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#系统要求)
 [![许可证](https://img.shields.io/badge/license-Apache--2.0-d7d3c6?style=flat-square)](LICENSE)
 
-ByteTrawl 是一个使用 Rust 编写的跨平台软件制品安全静态分诊、比较与发布审计工作台。它把应用、目录、发布包与单个文件统一建模为 Artifact，在不运行目标程序的情况下检查其结构、元数据、签名、依赖以及 PE、Mach-O 和 ELF 二进制内容。
+Hexlora 是一个使用 Rust 编写的跨平台软件制品安全静态分诊、比较与发布审计工作台。它把应用、目录、发布包与单个文件统一建模为 Artifact，在不运行目标程序的情况下检查其结构、元数据、签名、依赖以及 PE、Mach-O 和 ELF 二进制内容。
 
 最新桌面能力包括 Size Lab 与交互式 treemap、熵 Area Chart/热力图与 Hex 跳转、Canvas 依赖节点图、签名/Provisioning 时间线、IPA 架构/隐私矩阵、Findings 严重度筛选、可保存的面板显隐与拖拽宽度、高对比模式，以及本地 SVG 报告和窗口截图导出。
 
@@ -13,24 +13,24 @@ ByteTrawl 是一个使用 Rust 编写的跨平台软件制品安全静态分诊�
 
 ## 截图
 
-[![ByteTrawl 正在检查 GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/bytetrawl/#gallery)
+[![Hexlora 正在检查 GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
-[在线图库](https://xnu.app/bytetrawl/#gallery) 会动态展示应用结构、Mach-O 信息、依赖解析、字符串提取和有界 Hex 查看。
+[在线图库](https://xnu.app/hexlora/#gallery) 会动态展示应用结构、Mach-O 信息、依赖解析、字符串提取和有界 Hex 查看。
 
 ## 安装
 
 ```sh
-brew install --cask everettjf/tap/bytetrawl
+brew install --cask everettjf/tap/hexlora
 ```
 
 可选：安装命令行工具：
 
 ```sh
-brew install everettjf/tap/bytetrawl-cli
+brew install everettjf/tap/hexlora-cli
 ```
 
 ```sh
-bytetrawl-cli --version
+hexlora-cli --version
 ```
 
 macOS 应用经过 Developer ID 签名和 Apple 公证，并附带公证票据。发布前会执行严格签名验证、公证票据验证和 Gatekeeper 评估。
@@ -63,9 +63,9 @@ macOS 应用经过 Developer ID 签名和 Apple 公证，并附带公证票据�
 ## CLI 示例
 
 ```sh
-bytetrawl-cli inspect ./SomeApp.app --pretty
-bytetrawl-cli inspect ./MyApp.ipa --depth deep --format sarif --output bytetrawl.sarif
-bytetrawl-cli inspect ./package --hash sha256 --strings --entropy
+hexlora-cli inspect ./SomeApp.app --pretty
+hexlora-cli inspect ./MyApp.ipa --depth deep --format sarif --output hexlora.sarif
+hexlora-cli inspect ./package --hash sha256 --strings --entropy
 ```
 
 `lightweight`、`standard` 和 `deep` 控制分析深度。退出码区分致命错误（`1`）、策略或 finding 失败（`2`）、取消（`4`）以及可用但不完整的报告（`5`）。
@@ -77,18 +77,18 @@ bytetrawl-cli inspect ./package --hash sha256 --strings --entropy
 - 使用上述命令安装时需要 Homebrew
 
 ```sh
-cargo run -p bytetrawl
+cargo run -p hexlora
 ```
 
 GitHub Actions 可原生构建 Windows x64 与 Linux amd64 安装包：Windows 提供 MSI 和便携 ZIP，Linux 提供 DEB 和便携 tar.gz。手动运行 **Package Windows and Linux** 工作流只生成 Actions 构件；推送 `v*` 标签还会把经过检查的构件与 `SHA256SUMS` 发布到 GitHub Releases。目前这些包尚未进行代码签名，安装前请核对校验和。核心分析层不依赖 GPUI，可在所有支持的宿主上静态检查 Windows PE 和 Linux ELF。
 
 ## 安全边界
 
-ByteTrawl 是只读静态分析工具：不会执行导入程序、挂载镜像、安装软件包、自动解包、反编译、调试进程或修改字节。目录发现不跟随符号链接；解析输入、递归深度、文件数、字符串、重定位、归档成员和外部命令输出都有显式限制。启发式 finding 是调查线索，不是恶意软件结论。
+Hexlora 是只读静态分析工具：不会执行导入程序、挂载镜像、安装软件包、自动解包、反编译、调试进程或修改字节。目录发现不跟随符号链接；解析输入、递归深度、文件数、字符串、重定位、归档成员和外部命令输出都有显式限制。启发式 finding 是调查线索，不是恶意软件结论。
 
 ## 自动化质量保障
 
-除完整 Rust workspace 测试、Clippy、Rust 1.88 最低版本、CLI/报告契约和 macOS App 构建启动测试外，ByteTrawl 还用 16 个经过长度与 SHA-256 固定的公开真实制品回归 IPA、APK、APPX/MSIX、有效及破坏签名的 macOS App、公证 PKG、DMG、ISO、PE、ELF、DEB、RPM 和异常 APPX。发布流程还会实际通过 Homebrew 安装 App 与 CLI，并验证 Developer ID 签名、Apple 公证、stapler、Gatekeeper 和 Formula 自测。详见[自动化测试矩阵](docs/testing.md)。
+除完整 Rust workspace 测试、Clippy、Rust 1.88 最低版本、CLI/报告契约和 macOS App 构建启动测试外，Hexlora 还用 16 个经过长度与 SHA-256 固定的公开真实制品回归 IPA、APK、APPX/MSIX、有效及破坏签名的 macOS App、公证 PKG、DMG、ISO、PE、ELF、DEB、RPM 和异常 APPX。发布流程还会实际通过 Homebrew 安装 App 与 CLI，并验证 Developer ID 签名、Apple 公证、stapler、Gatekeeper 和 Formula 自测。详见[自动化测试矩阵](docs/testing.md)。
 
 ## 规划与文档
 
@@ -96,6 +96,6 @@ ByteTrawl 是只读静态分析工具：不会执行导入程序、挂载镜像�
 - [现状与竞品分析](docs/product-analysis-roadmap.md)
 - [IPAView 融合计划](docs/ipa-convergence-plan.md)
 - [自动化测试矩阵](docs/testing.md)
-- [GitHub Pages](https://xnu.app/bytetrawl/)
+- [GitHub Pages](https://xnu.app/hexlora/)
 
 英文 README 是规范源；本地化页面在版本、安装方式或能力发生变化时同步更新。

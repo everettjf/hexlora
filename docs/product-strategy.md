@@ -1,4 +1,4 @@
-# ByteTrawl 产品战略与完整路线图
+# Hexlora 产品战略与完整路线图
 
 > 产品定位：**跨平台软件制品的安全静态分诊、比较与发布审计工作台**  
 > 状态：产品主规划  
@@ -12,7 +12,7 @@
 
 ## 1. 产品定义
 
-ByteTrawl 面向已经构建完成、即将安装、准备发布或需要调查的软件制品。用户把一个应用、安装包、二进制、归档、磁盘镜像或目录交给 ByteTrawl，在不运行目标程序、不安装软件、默认不挂载镜像、不无界解压内容的前提下，快速获得以下答案：
+Hexlora 面向已经构建完成、即将安装、准备发布或需要调查的软件制品。用户把一个应用、安装包、二进制、归档、磁盘镜像或目录交给 Hexlora，在不运行目标程序、不安装软件、默认不挂载镜像、不无界解压内容的前提下，快速获得以下答案：
 
 1. **它是什么？** 格式、平台、架构、版本、身份和入口点。
 2. **里面有什么？** 文件、组件、框架、插件、扩展、资源和嵌套制品。
@@ -25,21 +25,21 @@ ByteTrawl 面向已经构建完成、即将安装、准备发布或需要调查�
 
 ### 一句话承诺
 
-> 在运行、安装或发布一个软件制品之前，先用 ByteTrawl 看清它。
+> 在运行、安装或发布一个软件制品之前，先用 Hexlora 看清它。
 
 ### 产品类别
 
-ByteTrawl 不是单一格式查看器，也不是完整逆向工程平台。它位于三类工具之间：
+Hexlora 不是单一格式查看器，也不是完整逆向工程平台。它位于三类工具之间：
 
 ```text
 Finder / Quick Look / 文件管理器
                 ↓
-      ByteTrawl：识别、盘点、审计、比较、报告
+      Hexlora：识别、盘点、审计、比较、报告
                 ↓
 IDA / Ghidra / Binary Ninja / Hopper / ImHex / jadx / 平台工具
 ```
 
-ByteTrawl 的价值是降低“第一轮理解软件制品”的成本，并把结果转化为可比较、可分享、可自动化的发布证据。
+Hexlora 的价值是降低“第一轮理解软件制品”的成本，并把结果转化为可比较、可分享、可自动化的发布证据。
 
 ## 2. 产品原则
 
@@ -76,7 +76,7 @@ ByteTrawl 的价值是降低“第一轮理解软件制品”的成本，并把�
 
 ### 2.6 只读核心，专业工具协作
 
-- ByteTrawl 近期不做 binary patching、完整反编译器或 debugger。
+- Hexlora 近期不做 binary patching、完整反编译器或 debugger。
 - 外部工具集成是一等能力，不是临时按钮。
 - Handoff 应携带文件、member、offset、architecture 和 workspace 上下文。
 
@@ -285,7 +285,7 @@ ByteTrawl 的价值是降低“第一轮理解软件制品”的成本，并把�
 
 ### 6.6 Tool Ecosystem
 
-目标：ByteTrawl 成为分析入口和上下文协调器。
+目标：Hexlora 成为分析入口和上下文协调器。
 
 能力：
 
@@ -383,21 +383,21 @@ Compare 只重算变化节点；规则变化时可尽量复用 facts 重跑 find
 
 ### 8.5 Crate 方向
 
-- `bytetrawl-core`：Artifact、Source、Fact、Evidence、Finding、Snapshot、Compare contract。
-- `bytetrawl-format`：PE/Mach-O/ELF 与基础 magic。
-- `bytetrawl-container`：ZIP/tar/ar/XAR/DMG/ISO 和 virtual members，可从 analysis 中拆出。
-- `bytetrawl-apple`：macOS bundle、signature/notarization、PKG/DMG 语义。
-- `bytetrawl-ios`：IPA、mobileprovision、privacy、embedded targets。
-- 后续 `bytetrawl-windows`、`bytetrawl-linux`、`bytetrawl-android`。
-- `bytetrawl-rules`：规则执行、policy、suppression。
-- `bytetrawl-report`：schema、diff、JSON/HTML/SARIF。
+- `hexlora-core`：Artifact、Source、Fact、Evidence、Finding、Snapshot、Compare contract。
+- `hexlora-format`：PE/Mach-O/ELF 与基础 magic。
+- `hexlora-container`：ZIP/tar/ar/XAR/DMG/ISO 和 virtual members，可从 analysis 中拆出。
+- `hexlora-apple`：macOS bundle、signature/notarization、PKG/DMG 语义。
+- `hexlora-ios`：IPA、mobileprovision、privacy、embedded targets。
+- 后续 `hexlora-windows`、`hexlora-linux`、`hexlora-android`。
+- `hexlora-rules`：规则执行、policy、suppression。
+- `hexlora-report`：schema、diff、JSON/HTML/SARIF。
 - UI、CLI 和 tools 继续独立。
 
 无需一次完成拆分；每次只在新能力确实需要边界时迁移。
 
 ## 9. 安全模型
 
-ByteTrawl 分析的输入默认不可信。
+Hexlora 分析的输入默认不可信。
 
 ### 必须保持的约束
 
@@ -453,9 +453,9 @@ ByteTrawl 分析的输入默认不可信。
 - macOS bundle identity/components/entitlements/signature/notarization 深化。
 - PKG Distribution/PackageInfo/Scripts/Payload/BOM 摘要。
 
-详细等价和迁移门槛见 [ByteTrawl × IPAView 功能收敛规划](ipa-convergence-plan.md)。
+详细等价和迁移门槛见 [Hexlora × IPAView 功能收敛规划](ipa-convergence-plan.md)。
 
-完成标准：IPAView parity matrix 全通过；共享 golden fixtures 一致；20 个合法样本核心字段一致；ByteTrawl 可以承担 IPAView 的主要用户任务，但 IPAView 仍保留迁移期。
+完成标准：IPAView parity matrix 全通过；共享 golden fixtures 一致；20 个合法样本核心字段一致；Hexlora 可以承担 IPAView 的主要用户任务，但 IPAView 仍保留迁移期。
 
 ### 1.3 — Compare & Size
 
@@ -682,7 +682,7 @@ ByteTrawl 分析的输入默认不可信。
 
 ### 规划维护
 
-- 本文档是 ByteTrawl 产品方向的主来源。
+- 本文档是 Hexlora 产品方向的主来源。
 - [现状分析与竞品研究](product-analysis-roadmap.md) 作为决策依据和历史研究。
 - [IPAView 功能收敛规划](ipa-convergence-plan.md) 作为 Apple/IPA 专项执行计划。
 - 每个重要版本发布后复查路线图，完成项移入 release notes，未完成项重新排序，避免无限累积。
@@ -695,7 +695,7 @@ ByteTrawl 分析的输入默认不可信。
 2. 引入 ZIP virtual member nodes，保留现有中央目录风险检测。
 3. 建立 Evidence locator，支持 filesystem path、archive member、plist key、file offset。
 4. 导入 IPAView golden fixtures 和 JSON snapshots。
-5. 在新 `bytetrawl-ios` 中完成 IPA detection、Payload/main app 和 identity。
+5. 在新 `hexlora-ios` 中完成 IPA detection、Payload/main app 和 identity。
 6. 把结果接入现有 Artifact Tree、Metadata 和 CLI report。
 
 完成这六项后，再进入 IPA provisioning/privacy 规则和 UI 产品化。这样同一基础也能服务 APK、APPX/MSIX、PKG、DEB/RPM 和未来 Compare。

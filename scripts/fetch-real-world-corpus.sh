@@ -2,8 +2,8 @@
 set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-manifest=${BYTETRAWL_CORPUS_MANIFEST:-"$project_root/tests/real-world-corpus/manifest.json"}
-corpus_dir=${BYTETRAWL_CORPUS_DIR:-"$project_root/target/real-world-corpus/artifacts"}
+manifest=${HEXLORA_CORPUS_MANIFEST:-"$project_root/tests/real-world-corpus/manifest.json"}
+corpus_dir=${HEXLORA_CORPUS_DIR:-"$project_root/target/real-world-corpus/artifacts"}
 
 for tool in curl jq shasum; do
     command -v "$tool" >/dev/null 2>&1 || {

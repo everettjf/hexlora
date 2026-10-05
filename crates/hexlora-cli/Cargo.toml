@@ -1,0 +1,27 @@
+[package]
+name = "hexlora-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hexlora-core = { path = "../hexlora-core" }
+hexlora-analysis = { path = "../hexlora-analysis" }
+hexlora-ios = { path = "../hexlora-ios" }
+hexlora-compare = { path = "../hexlora-compare" }
+hexlora-policy = { path = "../hexlora-policy" }
+hexlora-android = { path = "../hexlora-android" }
+hexlora-windows = { path = "../hexlora-windows" }
+hexlora-linux = { path = "../hexlora-linux" }
+clap.workspace = true
+ctrlc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+indexmap.workspace = true
+tempfile.workspace = true
+uuid.workspace = true
+
+[[bin]]
+name = "hexlora-cli"
+path = "src/main.rs"

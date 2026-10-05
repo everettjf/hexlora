@@ -2,11 +2,11 @@
 set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-manifest=${BYTETRAWL_CORPUS_MANIFEST:-"$project_root/tests/real-world-corpus/manifest.json"}
-corpus_root=${BYTETRAWL_CORPUS_DIR:-"$project_root/target/real-world-corpus/artifacts"}
-report_dir=${BYTETRAWL_CORPUS_REPORT_DIR:-"$project_root/target/real-world-corpus/reports"}
-prepared_root=${BYTETRAWL_CORPUS_PREPARED_DIR:-"$project_root/target/real-world-corpus/prepared"}
-cli="$project_root/target/debug/bytetrawl-cli"
+manifest=${HEXLORA_CORPUS_MANIFEST:-"$project_root/tests/real-world-corpus/manifest.json"}
+corpus_root=${HEXLORA_CORPUS_DIR:-"$project_root/target/real-world-corpus/artifacts"}
+report_dir=${HEXLORA_CORPUS_REPORT_DIR:-"$project_root/target/real-world-corpus/reports"}
+prepared_root=${HEXLORA_CORPUS_PREPARED_DIR:-"$project_root/target/real-world-corpus/prepared"}
+cli="$project_root/target/debug/hexlora-cli"
 
 command -v jq >/dev/null 2>&1 || {
     echo "required tool not found: jq" >&2
@@ -14,7 +14,7 @@ command -v jq >/dev/null 2>&1 || {
 }
 
 "$project_root/scripts/fetch-real-world-corpus.sh"
-cargo build --locked -p bytetrawl-cli
+cargo build --locked -p hexlora-cli
 mkdir -p "$report_dir" "$prepared_root"
 
 jq -c '.artifacts[]' "$manifest" | while IFS= read -r artifact; do

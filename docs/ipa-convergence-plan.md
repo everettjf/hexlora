@@ -1,22 +1,22 @@
-# ByteTrawl × IPAView 功能收敛规划
+# Hexlora × IPAView 功能收敛规划
 
-> 目标：让 ByteTrawl 完整覆盖并最终超越 IPAView 的 IPA 查看与发布审计能力，同时保持 ByteTrawl 的静态、只读、安全和跨格式架构。
+> 目标：让 Hexlora 完整覆盖并最终超越 IPAView 的 IPA 查看与发布审计能力，同时保持 Hexlora 的静态、只读、安全和跨格式架构。
 
 ## 决策摘要
 
-IPAView 暂时继续维护，ByteTrawl 不立即取代它。迁移采用“测试先行、双实现对照、达到验收线后再停止 IPAView 独立发布”的方式。
+IPAView 暂时继续维护，Hexlora 不立即取代它。迁移采用“测试先行、双实现对照、达到验收线后再停止 IPAView 独立发布”的方式。
 
 建议最终形态：
 
-- IPA 成为 ByteTrawl 的一等 Artifact，而不只是 ZIP 扩展名。
-- IPA 专属能力放入独立的 iOS analyzer；通用 ZIP、Mach-O、plist、signature、strings、hash、entropy 和 dependency 能力继续复用 ByteTrawl 现有模块。
+- IPA 成为 Hexlora 的一等 Artifact，而不只是 ZIP 扩展名。
+- IPA 专属能力放入独立的 iOS analyzer；通用 ZIP、Mach-O、plist、signature、strings、hash、entropy 和 dependency 能力继续复用 Hexlora 现有模块。
 - 默认不完整解压 IPA。成员树、plist、provisioning 和 Mach-O 通过有界 Archive Member reader 按需读取；只有用户明确交给外部工具时，才把单个成员安全地物化到隔离临时目录。
 - IPAView 的 JSON 报告字段在迁移期保持兼容，同时增加 `schema_version`、分析器版本、输入 hash、partial/errors 和 embedded targets。
 - IPAView 的历史代码作为行为基线，不直接把 SwiftUI 或 ZIPFoundation UI 架构搬进 GPUI。
 
 ## 1. 必须达到的 IPAView 功能等价线
 
-ByteTrawl 只有满足以下全部条件，才可以宣称完整替代 IPAView：
+Hexlora 只有满足以下全部条件，才可以宣称完整替代 IPAView：
 
 | 能力 | 等价验收标准 |
 |---|---|
@@ -46,13 +46,13 @@ IPAView 当前规则必须原样覆盖：
 - `missing-provisioning-profile`
 - `weak-NS*UsageDescription`
 
-迁移到 ByteTrawl 后建议使用带命名空间的稳定 ID，例如 `ios.ipa.missing-bundle-id`。兼容 JSON 中可以同时保留旧 `code`。
+迁移到 Hexlora 后建议使用带命名空间的稳定 ID，例如 `ios.ipa.missing-bundle-id`。兼容 JSON 中可以同时保留旧 `code`。
 
 ## 2. 架构规划
 
 ### 2.1 先解决 Archive Member，不直接完整解压
 
-ByteTrawl 当前节点以 `PathBuf` 指向物理文件。IPA 的真正内容位于 ZIP entry 中，因此先引入数据源抽象：
+Hexlora 当前节点以 `PathBuf` 指向物理文件。IPA 的真正内容位于 ZIP entry 中，因此先引入数据源抽象：
 
 ```text
 ArtifactSource
@@ -84,10 +84,10 @@ ArtifactSource
 
 ### 2.2 独立 iOS 语义层
 
-建议新增 `bytetrawl-ios` crate，而不是把 IPA 规则堆入通用 ZIP analyzer：
+建议新增 `hexlora-ios` crate，而不是把 IPA 规则堆入通用 ZIP analyzer：
 
 ```text
-crates/bytetrawl-ios/
+crates/hexlora-ios/
 ├── ipa.rs              # Payload 与主 App 定位
 ├── bundle.rs           # Info.plist 与 embedded targets
 ├── mobileprovision.rs  # CMS/plist 与 entitlements
@@ -99,11 +99,11 @@ crates/bytetrawl-ios/
 
 通用能力继续由现有模块提供：
 
-- ZIP 中央目录与危险路径：`bytetrawl-analysis`
-- Mach-O/fat slices/signature blob：`bytetrawl-format`
-- 通用 Artifact、Finding、Evidence：`bytetrawl-core`
-- GUI/虚拟树：`bytetrawl-ui`
-- JSON/CI：`bytetrawl-cli`
+- ZIP 中央目录与危险路径：`hexlora-analysis`
+- Mach-O/fat slices/signature blob：`hexlora-format`
+- 通用 Artifact、Finding、Evidence：`hexlora-core`
+- GUI/虚拟树：`hexlora-ui`
+- JSON/CI：`hexlora-cli`
 
 ### 2.3 报告模型
 
@@ -138,14 +138,14 @@ crates/bytetrawl-ios/
 
 ### Phase 0 — 行为契约与回归样本（2–3 天）
 
-在写 ByteTrawl IPA analyzer 前，先固定 IPAView 行为：
+在写 Hexlora IPA analyzer 前，先固定 IPAView 行为：
 
 1. 从 IPAView 的 4 个现有测试扩展成共享 golden fixtures。
 2. 保存 IPAView 当前 JSON 作为兼容快照。
 3. 最少覆盖：正常 IPA、无 Payload、无 `.app`、无 Info.plist、binary plist、thin arm64、fat arm64+x86_64、无 profile、有 profile、无 privacy manifest、多个 appex/framework/localization。
 4. 增加敌意 ZIP：zip slip、symlink、超高压缩比、重复 entry、CRC 错误、超大 plist、嵌套过深。
 
-验收：fixtures 不包含第三方商业 IPA；IPAView Core 与未来 ByteTrawl analyzer 可读取同一组测试输入和预期 JSON。
+验收：fixtures 不包含第三方商业 IPA；IPAView Core 与未来 Hexlora analyzer 可读取同一组测试输入和预期 JSON。
 
 ### Phase 1 — IPA 一等识别与安全成员树（5–7 天）
 
@@ -167,9 +167,9 @@ crates/bytetrawl-ios/
 6. 汇总 UsageDescriptions，检查 Privacy Manifest。
 7. 实现 IPAView 现有规则与 JSON 兼容导出。
 
-验收：共享 fixture 上，兼容字段和 IPAView golden JSON 语义一致；规则集合与 severity 一致；ByteTrawl CLI 可输出 IPA report。
+验收：共享 fixture 上，兼容字段和 IPAView golden JSON 语义一致；规则集合与 severity 一致；Hexlora CLI 可输出 IPA report。
 
-### Phase 3 — ByteTrawl UI 产品化（5–7 天）
+### Phase 3 — Hexlora UI 产品化（5–7 天）
 
 建议给 IPA 使用稳定的信息架构，而不是再增加十几个顶层 tab：
 
@@ -183,7 +183,7 @@ crates/bytetrawl-ios/
 
 同时增加 File → Open Recent，统一 IPA 与其他 Artifact 最近记录。
 
-验收：IPAView 的 Overview/Findings/Files 用户任务全部能在 ByteTrawl 内完成，且每条 finding 可跳转到 target/plist/member/Mach-O slice。
+验收：IPAView 的 Overview/Findings/Files 用户任务全部能在 Hexlora 内完成，且每条 finding 可跳转到 target/plist/member/Mach-O slice。
 
 ### Phase 4 — 超越 IPAView（1–2 个版本，按价值排序）
 
@@ -202,21 +202,21 @@ crates/bytetrawl-ios/
 1. 功能等价表全部通过。
 2. 共享测试和恶意 ZIP 安全测试全部通过。
 3. 至少 20 个合法自有/开源 IPA 样本对照，核心字段一致率 100%；差异均有明确兼容说明。
-4. ByteTrawl 对同一 IPA 的打开时间和内存不显著劣于 IPAView，并且取消立即生效。
+4. Hexlora 对同一 IPA 的打开时间和内存不显著劣于 IPAView，并且取消立即生效。
 5. IPA JSON schema 有文档、版本和迁移说明。
-6. ByteTrawl 的签名、公证、staple、Gatekeeper、Homebrew 安装验证全部通过。
+6. Hexlora 的签名、公证、staple、Gatekeeper、Homebrew 安装验证全部通过。
 7. IPAView README 标记迁移路径，并至少保留一个兼容维护版本；不立即删除仓库和历史 release。
 
 满足后：
 
 - IPAView 进入 maintenance-only。
-- IPAView 首页和 README 指向 ByteTrawl。
+- IPAView 首页和 README 指向 Hexlora。
 - Homebrew Cask 可保留一段迁移期，然后 deprecate，而不是直接移除。
-- ByteTrawl release notes 明确列出 IPAView parity matrix。
+- Hexlora release notes 明确列出 IPAView parity matrix。
 
 ## 5. 建议的版本安排
 
-| ByteTrawl 版本 | 范围 | 是否可替代 IPAView |
+| Hexlora 版本 | 范围 | 是否可替代 IPAView |
 |---|---|---|
 | 1.1 | Archive Member 数据源、IPA 识别、Payload/App 成员树 | 否 |
 | 1.2 | IPAView identity/size/framework/extension/localization/Mach-O parity | 仍不完全 |

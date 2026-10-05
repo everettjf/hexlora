@@ -1,10 +1,10 @@
-Source: bytetrawl
+Source: hexlora
 Section: utils
 Priority: optional
-Maintainer: ByteTrawl contributors
+Maintainer: Hexlora contributors
 Standards-Version: 4.7.0
 
-Package: bytetrawl
+Package: hexlora
 Architecture: any
 Depends: ${shlibs:Depends}
 Description: Cross-platform application and binary inspection workbench

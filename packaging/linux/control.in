@@ -1,11 +1,11 @@
-Package: bytetrawl
+Package: hexlora
 Version: @VERSION@
 Architecture: @ARCH@
-Maintainer: ByteTrawl contributors
+Maintainer: Hexlora contributors
 Depends: @DEPENDS@
 Section: utils
 Priority: optional
-Homepage: https://github.com/everettjf/bytetrawl
+Homepage: https://github.com/everettjf/hexlora
 Description: Cross-platform application and binary inspection workbench
- ByteTrawl provides a graphical workbench and command-line interface for
+ Hexlora provides a graphical workbench and command-line interface for
  statically inspecting application packages, directories, and binary files.

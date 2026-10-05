@@ -1,0 +1,17 @@
+[package]
+name = "hexlora-compare"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hexlora-core = { path = "../hexlora-core" }
+hexlora-ios = { path = "../hexlora-ios" }
+hexlora-analysis = { path = "../hexlora-analysis" }
+serde.workspace = true
+indexmap.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

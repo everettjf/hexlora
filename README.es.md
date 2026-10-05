@@ -1,11 +1,11 @@
-# ByteTrawl
+# Hexlora
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [Português (Brasil)](README.pt-BR.md) · **Español** · [Deutsch](README.de.md)
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#requisitos)
 [![Licencia](https://img.shields.io/badge/license-Apache--2.0-d7d3c6?style=flat-square)](LICENSE)
 
-ByteTrawl es un banco de trabajo multiplataforma, escrito en Rust, para el triaje estático seguro, la comparación y la auditoría de publicación de artefactos de software. Modela aplicaciones, directorios, paquetes y archivos como Artifacts para inspeccionar su estructura, metadatos, firmas, dependencias y binarios PE, Mach-O y ELF sin ejecutar el contenido analizado.
+Hexlora es un banco de trabajo multiplataforma, escrito en Rust, para el triaje estático seguro, la comparación y la auditoría de publicación de artefactos de software. Modela aplicaciones, directorios, paquetes y archivos como Artifacts para inspeccionar su estructura, metadatos, firmas, dependencias y binarios PE, Mach-O y ELF sin ejecutar el contenido analizado.
 
 La app incluye Size Lab y treemaps interactivos, gráfico de entropía con salto a Hex, grafo Canvas de dependencias, cronologías de firma/provisioning, matriz IPA de arquitectura/privacidad, filtros de hallazgos, anchos de panel guardados, alto contraste y exportación local de SVG y capturas de ventana.
 
@@ -13,20 +13,20 @@ El [README en inglés](README.md#detailed-support-matrix) es la fuente canónica
 
 ## Capturas
 
-[![ByteTrawl inspeccionando GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/bytetrawl/#gallery)
+[![Hexlora inspeccionando GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
-La [galería interactiva](https://xnu.app/bytetrawl/#gallery) alterna entre estructura, Mach-O, dependencias, strings y la inspección Hex acotada.
+La [galería interactiva](https://xnu.app/hexlora/#gallery) alterna entre estructura, Mach-O, dependencias, strings y la inspección Hex acotada.
 
 ## Instalación con Homebrew
 
 ```sh
-brew install --cask everettjf/tap/bytetrawl
+brew install --cask everettjf/tap/hexlora
 ```
 
 Herramienta de línea de comandos opcional:
 
 ```sh
-brew install everettjf/tap/bytetrawl-cli
+brew install everettjf/tap/hexlora-cli
 ```
 
 La aplicación para macOS está firmada con Developer ID, notarizada por Apple y lleva adjunto el ticket de notarización. Cada release supera la verificación estricta de firma, la validación del ticket y la evaluación de Gatekeeper.
@@ -58,9 +58,9 @@ Atajos: `⌘N` ventana nueva, `⌘O` archivo, `⇧⌘O` carpeta, `⌥⌘O` works
 ## CLI
 
 ```sh
-bytetrawl-cli inspect ./SomeApp.app --pretty
-bytetrawl-cli inspect ./MyApp.ipa --depth deep --format sarif --output bytetrawl.sarif
-bytetrawl-cli inspect ./package --hash sha256 --strings --entropy
+hexlora-cli inspect ./SomeApp.app --pretty
+hexlora-cli inspect ./MyApp.ipa --depth deep --format sarif --output hexlora.sarif
+hexlora-cli inspect ./package --hash sha256 --strings --entropy
 ```
 
 Las profundidades son `lightweight`, `standard` y `deep`. Los códigos distinguen error fatal (`1`), fallo de policy/finding (`2`), cancelación (`4`) e informe parcial utilizable (`5`).
@@ -75,7 +75,7 @@ El núcleo no depende de GPUI y puede inspeccionar Windows PE y Linux ELF estát
 
 ## Límites de seguridad
 
-ByteTrawl es estático y de solo lectura. No ejecuta programas importados, monta imágenes, instala paquetes, extrae archivos automáticamente, descompila, depura ni modifica bytes. No sigue enlaces simbólicos y limita explícitamente entradas, recursión, archivos, strings, miembros de archivos y salida de comandos. Los findings heurísticos son indicios, no veredictos de malware.
+Hexlora es estático y de solo lectura. No ejecuta programas importados, monta imágenes, instala paquetes, extrae archivos automáticamente, descompila, depura ni modifica bytes. No sigue enlaces simbólicos y limita explícitamente entradas, recursión, archivos, strings, miembros de archivos y salida de comandos. Los findings heurísticos son indicios, no veredictos de malware.
 
 ## Garantía de calidad automatizada
 
@@ -83,6 +83,6 @@ Además del workspace Rust completo, Clippy, Rust 1.88 mínimo, contratos de CLI
 
 ## Documentación
 
-[Estrategia](docs/product-strategy.md) · [Análisis del producto y competidores](docs/product-analysis-roadmap.md) · [Plan IPAView](docs/ipa-convergence-plan.md) · [Pruebas](docs/testing.md) · [Sitio web](https://xnu.app/bytetrawl/)
+[Estrategia](docs/product-strategy.md) · [Análisis del producto y competidores](docs/product-analysis-roadmap.md) · [Plan IPAView](docs/ipa-convergence-plan.md) · [Pruebas](docs/testing.md) · [Sitio web](https://xnu.app/hexlora/)
 
 El README en inglés es canónico; las traducciones se sincronizan al cambiar la versión, instalación o capacidades principales.

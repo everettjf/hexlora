@@ -1,0 +1,40 @@
+name: Hexlora release audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact:
+        description: Path to the built IPA, APK, MSIX, DEB, app, directory, or binary
+        required: true
+        type: string
+
+jobs:
+  static-release-audit:
+    runs-on: macos-15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Hexlora CLI
+        run: cargo build --release -p hexlora-cli
+      - name: Enforce release policy and produce SARIF
+        run: >-
+          target/release/hexlora-cli inspect
+          "${{ inputs.artifact }}"
+          --depth deep
+          --policy examples/policies/store-release.json
+          --format sarif
+          --output hexlora.sarif
+      - name: Upload Code Scanning results
+        if: always() && hashFiles('hexlora.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: hexlora.sarif
+      - name: Preserve audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hexlora-release-audit
+          path: hexlora.sarif

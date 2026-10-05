@@ -1,18 +1,18 @@
-# ByteTrawl 现状分析与深度产品规划
+# Hexlora 现状分析与深度产品规划
 
-> 面向产品与工程决策 · 2026-08-27 · 基于 ByteTrawl 1.0.3 代码、测试、README 及同类产品官方资料
+> 面向产品与工程决策 · 2026-08-27 · 基于 Hexlora 1.0.3 代码、测试、README 及同类产品官方资料
 
-> 本文档保留现状审计和竞品研究；产品方向的主来源现为 [ByteTrawl 产品战略与完整路线图](product-strategy.md)。
+> 本文档保留现状审计和竞品研究；产品方向的主来源现为 [Hexlora 产品战略与完整路线图](product-strategy.md)。
 
 ## 结论先行
 
-ByteTrawl 已经不是一个简单的 Hex Viewer。它目前是一套以 **Artifact（应用、目录、包、文件）为中心的安全静态检查工作台**：能在 macOS 上统一识别和分析 PE、Mach-O、Universal Mach-O 与 ELF，浏览应用目录结构，检查签名、依赖、字符串、节区、重定位、归档与磁盘镜像元数据，并通过 CLI 输出稳定 JSON。
+Hexlora 已经不是一个简单的 Hex Viewer。它目前是一套以 **Artifact（应用、目录、包、文件）为中心的安全静态检查工作台**：能在 macOS 上统一识别和分析 PE、Mach-O、Universal Mach-O 与 ELF，浏览应用目录结构，检查签名、依赖、字符串、节区、重定位、归档与磁盘镜像元数据，并通过 CLI 输出稳定 JSON。
 
 最适合的产品定位不是“更轻量的 IDA”，而是：
 
 > **打开任何应用、安装包或二进制，在不运行、不挂载、不安装的前提下，快速回答它是什么、里面有什么、依赖什么、是否可信、与上一版有什么变化，以及下一步应该用哪个专业工具。**
 
-完整逆向平台已经在反编译、控制流图、调试、脚本和插件生态上形成很深的壁垒。ByteTrawl 更有机会成为 Finder/Quick Look 与 IDA、Ghidra、Binary Ninja、Hopper 之间的“第一站”，并进一步进入发布审计、制品差异和 CI 质量门禁。
+完整逆向平台已经在反编译、控制流图、调试、脚本和插件生态上形成很深的壁垒。Hexlora 更有机会成为 Finder/Quick Look 与 IDA、Ghidra、Binary Ninja、Hopper 之间的“第一站”，并进一步进入发布审计、制品差异和 CI 质量门禁。
 
 建议接下来优先做四件事：
 
@@ -85,19 +85,19 @@ ByteTrawl 已经不是一个简单的 Hex Viewer。它目前是一套以 **Artif
 - 支持拖入文件、应用、包、workspace 或目录。
 - Workspace 保存 Artifact 路径、选中节点/视图、书签、笔记、工具配置和可复用分析快照。
 - 大型树、字符串、符号、依赖、图边、节区、segment、relocation 表使用虚拟化渲染。
-- `bytetrawl-cli inspect` 输出版本化 JSON；支持 lightweight/standard/deep、SHA-256/SHA-1/MD5、strings、entropy、signature、dependencies、`--fail-on` 与原子写入。
+- `hexlora-cli inspect` 输出版本化 JSON；支持 lightweight/standard/deep、SHA-256/SHA-1/MD5、strings、entropy、signature、dependencies、`--fail-on` 与原子写入。
 - 外部工具集成包括 Ghidra、IDA、Binary Ninja、Hopper、radare2、Cutter，以及按格式运行的 otool、codesign、readelf、objdump、dumpbin、Sigcheck、nm 等。GUI 工具只在用户明确点击后启动；命令输出有超时和大小限制。
 
 ## 3. 当前产品成熟度判断
 
 ### 已经做得好的部分
 
-1. **统一 Artifact 模型。** 多数工具一次只聚焦一个 executable 或一个 package；ByteTrawl 能同时表达应用目录、嵌套组件、资源和跨文件依赖。
+1. **统一 Artifact 模型。** 多数工具一次只聚焦一个 executable 或一个 package；Hexlora 能同时表达应用目录、嵌套组件、资源和跨文件依赖。
 2. **跨目标格式而不依赖宿主平台。** 在 macOS 上静态分析 Windows PE 和 Linux ELF，是明确的实用价值。
 3. **默认安全。** 不执行输入、不自动挂载、不自动解包、不跟随 symlink；昂贵任务按需且可取消。这比“打开即完整分析/执行插件”的逆向平台更适合未知制品快速分诊。
 4. **性能边界清晰。** mmap、4 KiB Hex window、虚拟列表、解析/条目/输出上限和缓存，已经形成可扩展基础。
 5. **从 GUI 到自动化有通路。** CLI JSON、severity threshold 和 workspace 让产品具备进入 CI 的雏形。
-6. **外部工具策略正确。** 已安装工具优先、未安装项不堆满界面，ByteTrawl 可以成为专业工具的入口而非替代品。
+6. **外部工具策略正确。** 已安装工具优先、未安装项不堆满界面，Hexlora 可以成为专业工具的入口而非替代品。
 
 ### 当前最明显的缺口
 
@@ -114,47 +114,47 @@ ByteTrawl 已经不是一个简单的 Hex Viewer。它目前是一套以 **Artif
 
 ### 4.1 完整逆向平台：不建议正面复制
 
-| 产品 | 官方定位与强项 | ByteTrawl 与其关系 |
+| 产品 | 官方定位与强项 | Hexlora 与其关系 |
 |---|---|---|
-| IDA Pro | 多处理器/多格式反汇编、Hex-Rays 反编译、图、调试、IDAPython/C++ SDK、插件与团队协作。官方称支持 60+ disassemblers | 深度远超 ByteTrawl；ByteTrawl 应负责快速盘点、筛选目标并一键交接 IDA，而不是自建同等级反编译器 |
-| Binary Ninja | HLIL 反编译、数据流分析、调试器、完整 API、headless 与 Enterprise collaboration | ByteTrawl 可在 Artifact/包层提供 Binary Ninja 不以其为核心的应用组合、签名、版本差异和发布审计 |
-| Ghidra | 免费开源、多平台、多架构，提供 disassembly、assembly、decompilation、graphing、scripting，并支持交互/自动模式 | 免费且功能深，无法用“免费反编译”差异化；ByteTrawl 要赢在启动快、Mac 原生、跨文件 Artifact 视角和低认知负担 |
-| Hopper | Mac 原生体验、Mach-O/iOS、Objective-C/Swift、反汇编、CFG、伪代码、LLDB/GDB、Python 和 SDK | 最接近“Mac 上好用的二进制工具”；ByteTrawl 应保持更宽的包/目录/发行制品视角，并把 Hopper 作为深度代码分析出口 |
-| Cutter/radare2 | 免费、跨平台、disassembly/decompiler/graph/debugger/hex/patching/emulation/scripting/plugins | 功能面宽但学习成本较高；ByteTrawl 可用清晰、只读、意见化 UI 服务“不想先学逆向框架”的用户 |
+| IDA Pro | 多处理器/多格式反汇编、Hex-Rays 反编译、图、调试、IDAPython/C++ SDK、插件与团队协作。官方称支持 60+ disassemblers | 深度远超 Hexlora；Hexlora 应负责快速盘点、筛选目标并一键交接 IDA，而不是自建同等级反编译器 |
+| Binary Ninja | HLIL 反编译、数据流分析、调试器、完整 API、headless 与 Enterprise collaboration | Hexlora 可在 Artifact/包层提供 Binary Ninja 不以其为核心的应用组合、签名、版本差异和发布审计 |
+| Ghidra | 免费开源、多平台、多架构，提供 disassembly、assembly、decompilation、graphing、scripting，并支持交互/自动模式 | 免费且功能深，无法用“免费反编译”差异化；Hexlora 要赢在启动快、Mac 原生、跨文件 Artifact 视角和低认知负担 |
+| Hopper | Mac 原生体验、Mach-O/iOS、Objective-C/Swift、反汇编、CFG、伪代码、LLDB/GDB、Python 和 SDK | 最接近“Mac 上好用的二进制工具”；Hexlora 应保持更宽的包/目录/发行制品视角，并把 Hopper 作为深度代码分析出口 |
+| Cutter/radare2 | 免费、跨平台、disassembly/decompiler/graph/debugger/hex/patching/emulation/scripting/plugins | 功能面宽但学习成本较高；Hexlora 可用清晰、只读、意见化 UI 服务“不想先学逆向框架”的用户 |
 
-这些工具的官方能力共同表明，完整反编译平台的最低门槛已经包括反汇编、IR/伪代码、CFG/xrefs、类型系统、patch、debugger、脚本和插件。ByteTrawl 若追赶这条路线，会长期成为不完整的替代品。
+这些工具的官方能力共同表明，完整反编译平台的最低门槛已经包括反汇编、IR/伪代码、CFG/xrefs、类型系统、patch、debugger、脚本和插件。Hexlora 若追赶这条路线，会长期成为不完整的替代品。
 
 ### 4.2 Hex 与格式专项工具：应选择性吸收
 
-| 产品 | 核心优势 | 对 ByteTrawl 的启示 |
+| 产品 | 核心优势 | 对 Hexlora 的启示 |
 |---|---|---|
 | ImHex | Pattern Language、结构高亮、visualizers、高级搜索、插件、hash、compare，跨平台 | 最值得借鉴的是“结构模板 + 原始字节联动”，而不是可写 Hex editor |
 | 010 Editor | Binary Templates、脚本、超大文件编辑、compare、histogram、data inspector、workspace | Binary diff、typed data inspector、模板结果树是明显缺口；编辑能力可后置或永久不做 |
-| Synalyze It! | Mac 原生、grammar、超大文件、编码/数值/掩码搜索、字符串、checksum、binary compare、GraphViz | 证明 Mac 用户愿意使用“结构化 Hex”专项工具；ByteTrawl 可先支持 Kaitai Struct 或只读模板，而不创造新 DSL |
-| Detect It Easy | 文件类型、编译器、linker、packer/protector 的 signature + heuristic 识别，脚本可扩展 | ByteTrawl 当前 compiler hints 和 entropy findings 较浅，应加入规则包和 packer/toolchain identification |
-| PE-bear | 面向恶意样本的快速、容错 PE 第一眼检查，强调 malformed PE | ByteTrawl 的 parser safety 很好，但 PE 专项深度、资源/.NET/TLS/exception/debug directory 等仍有提升空间 |
+| Synalyze It! | Mac 原生、grammar、超大文件、编码/数值/掩码搜索、字符串、checksum、binary compare、GraphViz | 证明 Mac 用户愿意使用“结构化 Hex”专项工具；Hexlora 可先支持 Kaitai Struct 或只读模板，而不创造新 DSL |
+| Detect It Easy | 文件类型、编译器、linker、packer/protector 的 signature + heuristic 识别，脚本可扩展 | Hexlora 当前 compiler hints 和 entropy findings 较浅，应加入规则包和 packer/toolchain identification |
+| PE-bear | 面向恶意样本的快速、容错 PE 第一眼检查，强调 malformed PE | Hexlora 的 parser safety 很好，但 PE 专项深度、资源/.NET/TLS/exception/debug directory 等仍有提升空间 |
 
 ### 4.3 应用与安装包检查：这是最直接的产品邻域
 
-| 产品 | 核心优势 | ByteTrawl 的机会 |
+| 产品 | 核心优势 | Hexlora 的机会 |
 |---|---|---|
-| Apparency | macOS app components、document/URL types、Gatekeeper、notarization、sandbox、code signature、entitlements、Info.plist、linked frameworks | ByteTrawl 已覆盖其中一部分，并额外支持 PE/ELF/Hex/Strings；应补齐 macOS bundle 语义与解释层 |
-| Suspicious Package | 不安装即可浏览 pkg payload、安装路径、scripts、receipts、签名/公证、entitlements、潜在问题、Quick Look | ByteTrawl 的 XAR 目前只是 TOC。完整 pkg member tree、scripts、Bom/PackageInfo/Distribution 和安装影响是高价值方向 |
-| Android Studio APK Analyzer | APK/AAB 文件树、raw/download size、DEX class/package/method counts、Manifest 重建、resources 预览、两版 APK 对比、CLI | 其“文件树 + 体积归因 + 两版本比较”是 ByteTrawl 应跨平台泛化的核心模型 |
-| jadx | APK/DEX/AAR/AAB/XAPK 反编译、Manifest/resources 解码、代码导航、搜索、deobfuscation | ByteTrawl 不必做 Java decompiler；应识别 Android 语义后把 DEX/代码交给 jadx |
+| Apparency | macOS app components、document/URL types、Gatekeeper、notarization、sandbox、code signature、entitlements、Info.plist、linked frameworks | Hexlora 已覆盖其中一部分，并额外支持 PE/ELF/Hex/Strings；应补齐 macOS bundle 语义与解释层 |
+| Suspicious Package | 不安装即可浏览 pkg payload、安装路径、scripts、receipts、签名/公证、entitlements、潜在问题、Quick Look | Hexlora 的 XAR 目前只是 TOC。完整 pkg member tree、scripts、Bom/PackageInfo/Distribution 和安装影响是高价值方向 |
+| Android Studio APK Analyzer | APK/AAB 文件树、raw/download size、DEX class/package/method counts、Manifest 重建、resources 预览、两版 APK 对比、CLI | 其“文件树 + 体积归因 + 两版本比较”是 Hexlora 应跨平台泛化的核心模型 |
+| jadx | APK/DEX/AAR/AAB/XAPK 反编译、Manifest/resources 解码、代码导航、搜索、deobfuscation | Hexlora 不必做 Java decompiler；应识别 Android 语义后把 DEX/代码交给 jadx |
 | Emerge Tools | app size treemap、file-type breakdown、变化和体积异常定位 | 体积分析天然适合 Artifact Tree，且比反编译更贴近发布工程与普通开发者 |
 
 ### 4.4 规则、供应链与 CI 邻域
 
-- YARA 通过文本、十六进制模式、正则、条件和 PE/ELF 模块支持可扩展样本分类。ByteTrawl 可集成 YARA，但需要明确它是规则命中，不是恶意判定。
-- OSV-Scanner 将 lockfile、已安装 artifacts 和 SBOM 映射到公开漏洞数据库，并提供 JSON/CI 工作流。ByteTrawl 可输出 SBOM 或调用现有引擎，但不应自行维护漏洞数据库。
-- Android APK Analyzer 的 CLI 与 ByteTrawl CLI 说明“桌面探索 + CI 门禁”是成熟组合。ByteTrawl 已有 `--fail-on`，下一步应补 baseline/diff、规则选择和 SARIF/CycloneDX/SPDX 输出。
+- YARA 通过文本、十六进制模式、正则、条件和 PE/ELF 模块支持可扩展样本分类。Hexlora 可集成 YARA，但需要明确它是规则命中，不是恶意判定。
+- OSV-Scanner 将 lockfile、已安装 artifacts 和 SBOM 映射到公开漏洞数据库，并提供 JSON/CI 工作流。Hexlora 可输出 SBOM 或调用现有引擎，但不应自行维护漏洞数据库。
+- Android APK Analyzer 的 CLI 与 Hexlora CLI 说明“桌面探索 + CI 门禁”是成熟组合。Hexlora 已有 `--fail-on`，下一步应补 baseline/diff、规则选择和 SARIF/CycloneDX/SPDX 输出。
 
 ## 5. 建议的产品定位与用户
 
 ### 核心定位
 
-**ByteTrawl = 跨平台软件制品的安全静态分诊、比较与发布审计工作台。**
+**Hexlora = 跨平台软件制品的安全静态分诊、比较与发布审计工作台。**
 
 它应优化以下 5 分钟任务：
 
@@ -254,7 +254,7 @@ ByteTrawl 已经不是一个简单的 Hex Viewer。它目前是一套以 **Artif
 
 **iOS IPA 收敛主线**
 
-- IPAView 的完整功能等价、迁移架构、共享测试、分阶段验收与停用门槛见 [ByteTrawl × IPAView 功能收敛规划](ipa-convergence-plan.md)。
+- IPAView 的完整功能等价、迁移架构、共享测试、分阶段验收与停用门槛见 [Hexlora × IPAView 功能收敛规划](ipa-convergence-plan.md)。
 - 在达到规划中的兼容字段、规则、JSON、UI、安全样本和真实 IPA 对照门槛前，IPAView 保持独立维护。
 
 **Windows 主线**
@@ -331,7 +331,7 @@ ByteTrawl 已经不是一个简单的 Hex Viewer。它目前是一套以 **Artif
 
 ## 10. 研究判断、限制与停止条件
 
-本报告以当前仓库实现为现状真相，以产品官方页面、官方文档和官方项目仓库为竞品能力依据。商业产品的内部性能、用户规模、完整定价和未公开路线图未纳入判断；竞品功能也可能随版本变化。这里的优先级是基于 ByteTrawl 当前架构和“macOS-first、静态、只读、跨格式”假设的产品推断，不是用户访谈或市场规模数据的替代品。
+本报告以当前仓库实现为现状真相，以产品官方页面、官方文档和官方项目仓库为竞品能力依据。商业产品的内部性能、用户规模、完整定价和未公开路线图未纳入判断；竞品功能也可能随版本变化。这里的优先级是基于 Hexlora 当前架构和“macOS-first、静态、只读、跨格式”假设的产品推断，不是用户访谈或市场规模数据的替代品。
 
 研究在以下条件满足后停止：三个竞争层级均有官方证据；“是否做反编译器”“下一阶段补什么”两项关键决策已有互相独立的产品样本支持；继续增加同类工具不会实质改变定位结论。下一步最有价值的验证不是继续搜索更多竞品，而是访谈 5–8 位发布工程师/安全研究者，并用 20–30 个真实 `.app/.pkg/.dmg/.exe/.apk` 样本验证成员树、compare 和报告的任务完成率。
 

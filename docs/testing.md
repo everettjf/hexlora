@@ -1,6 +1,6 @@
 # Automated testing matrix
 
-ByteTrawl uses `scripts/verify.sh` as its local and CI quality gate. GitHub Actions runs the same
+Hexlora uses `scripts/verify.sh` as its local and CI quality gate. GitHub Actions runs the same
 command on every push and pull request, then builds and launches a real macOS application bundle.
 
 | Area | Automated coverage |

@@ -845,215 +845,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "bytetrawl"
-version = "1.1.16"
-dependencies = [
- "anyhow",
- "bytetrawl-analysis",
- "bytetrawl-android",
- "bytetrawl-compare",
- "bytetrawl-core",
- "bytetrawl-format",
- "bytetrawl-ios",
- "bytetrawl-linux",
- "bytetrawl-policy",
- "bytetrawl-tools",
- "bytetrawl-windows",
- "gpui",
- "gpui-component",
- "indexmap",
- "rfd",
- "serde",
- "serde_json",
- "uuid",
-]
-
-[[package]]
-name = "bytetrawl-analysis"
-version = "1.1.16"
-dependencies = [
- "apple-xar",
- "bytetrawl-core",
- "bytetrawl-format",
- "bytetrawl-signature",
- "chrono",
- "crc32fast",
- "flate2",
- "goblin",
- "hex",
- "imagesize 0.15.0",
- "indexmap",
- "md-5",
- "memmap2",
- "parking_lot",
- "plist",
- "quick-xml 0.38.4",
- "serde_json",
- "sha1",
- "sha2 0.10.9",
- "tar",
- "tempfile",
- "udif",
- "uuid",
- "walkdir",
- "zip",
-]
-
-[[package]]
-name = "bytetrawl-android"
-version = "1.1.16"
-dependencies = [
- "bytetrawl-analysis",
- "bytetrawl-core",
- "indexmap",
- "quick-xml 0.38.4",
- "serde",
- "tempfile",
- "zip",
-]
-
-[[package]]
-name = "bytetrawl-cli"
-version = "1.1.16"
-dependencies = [
- "bytetrawl-analysis",
- "bytetrawl-android",
- "bytetrawl-compare",
- "bytetrawl-core",
- "bytetrawl-ios",
- "bytetrawl-linux",
- "bytetrawl-policy",
- "bytetrawl-windows",
- "chrono",
- "clap",
- "ctrlc",
- "indexmap",
- "serde",
- "serde_json",
- "tempfile",
- "uuid",
-]
-
-[[package]]
-name = "bytetrawl-compare"
-version = "1.1.16"
-dependencies = [
- "bytetrawl-analysis",
- "bytetrawl-core",
- "bytetrawl-ios",
- "hex",
- "indexmap",
- "serde",
- "sha2 0.10.9",
- "tempfile",
-]
-
-[[package]]
-name = "bytetrawl-core"
-version = "1.1.16"
-dependencies = [
- "chrono",
- "indexmap",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "uuid",
-]
-
-[[package]]
-name = "bytetrawl-format"
-version = "1.1.16"
-dependencies = [
- "authenticode",
- "bytetrawl-core",
- "goblin",
- "hex",
- "imagesize 0.15.0",
- "indexmap",
- "quick-xml 0.38.4",
- "sha1",
- "sha2 0.10.9",
-]
-
-[[package]]
-name = "bytetrawl-ios"
-version = "1.1.16"
-dependencies = [
- "bytetrawl-analysis",
- "bytetrawl-core",
- "bytetrawl-format",
- "chrono",
- "hex",
- "indexmap",
- "plist",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "zip",
-]
-
-[[package]]
-name = "bytetrawl-linux"
-version = "1.1.16"
-dependencies = [
- "bytetrawl-core",
- "flate2",
- "indexmap",
- "serde",
- "tar",
- "tempfile",
- "xz2",
- "zstd",
-]
-
-[[package]]
-name = "bytetrawl-policy"
-version = "1.1.16"
-dependencies = [
- "bytetrawl-android",
- "bytetrawl-compare",
- "bytetrawl-core",
- "bytetrawl-ios",
- "bytetrawl-linux",
- "bytetrawl-windows",
- "chrono",
- "indexmap",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "bytetrawl-signature"
-version = "1.1.16"
-dependencies = [
- "bytetrawl-core",
- "indexmap",
- "wait-timeout",
-]
-
-[[package]]
-name = "bytetrawl-tools"
-version = "1.1.16"
-dependencies = [
- "bytetrawl-core",
- "wait-timeout",
-]
-
-[[package]]
-name = "bytetrawl-windows"
-version = "1.1.16"
-dependencies = [
- "bytetrawl-analysis",
- "bytetrawl-core",
- "indexmap",
- "quick-xml 0.38.4",
- "serde",
- "tempfile",
- "zip",
-]
-
-[[package]]
 name = "bzip2"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3017,6 +2808,215 @@ name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
+
+[[package]]
+name = "hexlora"
+version = "1.1.17"
+dependencies = [
+ "anyhow",
+ "gpui",
+ "gpui-component",
+ "hexlora-analysis",
+ "hexlora-android",
+ "hexlora-compare",
+ "hexlora-core",
+ "hexlora-format",
+ "hexlora-ios",
+ "hexlora-linux",
+ "hexlora-policy",
+ "hexlora-tools",
+ "hexlora-windows",
+ "indexmap",
+ "rfd",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "hexlora-analysis"
+version = "1.1.17"
+dependencies = [
+ "apple-xar",
+ "chrono",
+ "crc32fast",
+ "flate2",
+ "goblin",
+ "hex",
+ "hexlora-core",
+ "hexlora-format",
+ "hexlora-signature",
+ "imagesize 0.15.0",
+ "indexmap",
+ "md-5",
+ "memmap2",
+ "parking_lot",
+ "plist",
+ "quick-xml 0.38.4",
+ "serde_json",
+ "sha1",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "udif",
+ "uuid",
+ "walkdir",
+ "zip",
+]
+
+[[package]]
+name = "hexlora-android"
+version = "1.1.17"
+dependencies = [
+ "hexlora-analysis",
+ "hexlora-core",
+ "indexmap",
+ "quick-xml 0.38.4",
+ "serde",
+ "tempfile",
+ "zip",
+]
+
+[[package]]
+name = "hexlora-cli"
+version = "1.1.17"
+dependencies = [
+ "chrono",
+ "clap",
+ "ctrlc",
+ "hexlora-analysis",
+ "hexlora-android",
+ "hexlora-compare",
+ "hexlora-core",
+ "hexlora-ios",
+ "hexlora-linux",
+ "hexlora-policy",
+ "hexlora-windows",
+ "indexmap",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "hexlora-compare"
+version = "1.1.17"
+dependencies = [
+ "hex",
+ "hexlora-analysis",
+ "hexlora-core",
+ "hexlora-ios",
+ "indexmap",
+ "serde",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
+name = "hexlora-core"
+version = "1.1.17"
+dependencies = [
+ "chrono",
+ "indexmap",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "hexlora-format"
+version = "1.1.17"
+dependencies = [
+ "authenticode",
+ "goblin",
+ "hex",
+ "hexlora-core",
+ "imagesize 0.15.0",
+ "indexmap",
+ "quick-xml 0.38.4",
+ "sha1",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "hexlora-ios"
+version = "1.1.17"
+dependencies = [
+ "chrono",
+ "hex",
+ "hexlora-analysis",
+ "hexlora-core",
+ "hexlora-format",
+ "indexmap",
+ "plist",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "zip",
+]
+
+[[package]]
+name = "hexlora-linux"
+version = "1.1.17"
+dependencies = [
+ "flate2",
+ "hexlora-core",
+ "indexmap",
+ "serde",
+ "tar",
+ "tempfile",
+ "xz2",
+ "zstd",
+]
+
+[[package]]
+name = "hexlora-policy"
+version = "1.1.17"
+dependencies = [
+ "chrono",
+ "hexlora-android",
+ "hexlora-compare",
+ "hexlora-core",
+ "hexlora-ios",
+ "hexlora-linux",
+ "hexlora-windows",
+ "indexmap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "hexlora-signature"
+version = "1.1.17"
+dependencies = [
+ "hexlora-core",
+ "indexmap",
+ "wait-timeout",
+]
+
+[[package]]
+name = "hexlora-tools"
+version = "1.1.17"
+dependencies = [
+ "hexlora-core",
+ "wait-timeout",
+]
+
+[[package]]
+name = "hexlora-windows"
+version = "1.1.17"
+dependencies = [
+ "hexlora-analysis",
+ "hexlora-core",
+ "indexmap",
+ "quick-xml 0.38.4",
+ "serde",
+ "tempfile",
+ "zip",
+]
 
 [[package]]
 name = "hidden-trait"

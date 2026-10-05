@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="Hexlora"
+           Language="1033"
+           Version="$(var.ProductVersion)"
+           Manufacturer="Hexlora contributors"
+           UpgradeCode="4C375A5C-7344-4A74-BE79-208DD9BCA5D2">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Hexlora is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Hexlora">
+          <Component Id="ApplicationFiles" Guid="45EC0C0A-BA02-408D-AC37-2226FA7E3889" Win64="yes">
+            <File Id="HexloraExe" Source="$(var.SourceDir)\Hexlora.exe" KeyPath="yes">
+              <Shortcut Id="HexloraStartMenuShortcut"
+                        Directory="ApplicationProgramsFolder"
+                        Name="Hexlora"
+                        Description="Application and binary inspection workbench"
+                        Advertise="yes"
+                        WorkingDirectory="INSTALLFOLDER" />
+            </File>
+            <File Id="HexloraCliExe" Source="$(var.SourceDir)\hexlora-cli.exe" />
+            <File Id="LicenseFile" Source="$(var.SourceDir)\LICENSE" />
+            <File Id="ReadmeFile" Source="$(var.SourceDir)\README.md" />
+          </Component>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Hexlora">
+          <Component Id="ApplicationProgramsFolderCleanup" Guid="F666CAEC-9868-43D2-A867-117CCDE4AC5D">
+            <CreateFolder />
+            <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+            <RegistryValue Root="HKCU"
+                           Key="Software\Hexlora"
+                           Name="StartMenuFolder"
+                           Type="integer"
+                           Value="1"
+                           KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="ProductFeature" Title="Hexlora" Level="1">
+      <ComponentRef Id="ApplicationFiles" />
+      <ComponentRef Id="ApplicationProgramsFolderCleanup" />
+    </Feature>
+  </Product>
+</Wix>

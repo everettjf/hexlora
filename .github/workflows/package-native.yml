@@ -31,7 +31,7 @@ jobs:
           Get-FileHash $msi.FullName -Algorithm SHA256
       - uses: actions/upload-artifact@v4
         with:
-          name: bytetrawl-windows-x64
+          name: hexlora-windows-x64
           path: |
             dist/*.msi
             dist/*.zip
@@ -58,11 +58,11 @@ jobs:
           test -n "$deb"
           dpkg-deb --info "$deb"
           dpkg-deb --contents "$deb"
-          dpkg-deb --contents "$deb" | grep -q './usr/bin/bytetrawl$'
-          dpkg-deb --contents "$deb" | grep -q './usr/bin/bytetrawl-cli$'
+          dpkg-deb --contents "$deb" | grep -q './usr/bin/hexlora$'
+          dpkg-deb --contents "$deb" | grep -q './usr/bin/hexlora-cli$'
       - uses: actions/upload-artifact@v4
         with:
-          name: bytetrawl-linux-amd64
+          name: hexlora-linux-amd64
           path: |
             dist/*.deb
             dist/*.tar.gz
@@ -75,7 +75,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: bytetrawl-*
+          pattern: hexlora-*
           path: release-assets
           merge-multiple: true
       - name: Create checksums
