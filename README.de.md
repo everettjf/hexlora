@@ -13,7 +13,7 @@ Die englische [README](README.md#detailed-support-matrix) ist die maßgebliche Q
 
 ## Screenshots
 
-[![Hexlora untersucht GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
+[![Hexlora untersucht Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
 Die [Live-Galerie](https://xnu.app/hexlora/#gallery) wechselt zwischen Anwendungsstruktur, Mach-O-Details, Abhängigkeiten, extrahierten Strings und begrenzter Hex-Ansicht.
 

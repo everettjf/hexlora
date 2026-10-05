@@ -13,7 +13,7 @@ Hexlora は Rust で実装された、クロスプラットフォームのソフ
 
 ## スクリーンショット
 
-[![GrapeCompare.app を検査する Hexlora](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
+[![Hexlora.app を検査する Hexlora](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
 [ライブギャラリー](https://xnu.app/hexlora/#gallery)では、アプリ構造、Mach-O、依存関係、抽出文字列、範囲限定 Hex ビューを切り替えて確認できます。
 

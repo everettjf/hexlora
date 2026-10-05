@@ -13,7 +13,7 @@ Hexlora 是一个使用 Rust 编写的跨平台软件制品安全静态分诊、
 
 ## 截图
 
-[![Hexlora 正在检查 GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
+[![Hexlora 正在检查 Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
 [在线图库](https://xnu.app/hexlora/#gallery) 会动态展示应用结构、Mach-O 信息、依赖解析、字符串提取和有界 Hex 查看。
 

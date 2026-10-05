@@ -11,9 +11,9 @@ English is the canonical README. Localized editions cover installation, major ca
 
 ## Screenshots
 
-[![Hexlora inspecting GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
+[![Hexlora inspecting Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
-The live [Hexlora gallery](https://xnu.app/hexlora/#gallery) rotates through application structure, Mach-O details, dependency resolution, extracted strings, and bounded hex inspection. The screenshots were captured from Hexlora while statically inspecting `/Applications/GrapeCompare.app`.
+The live [Hexlora gallery](https://xnu.app/hexlora/#gallery) rotates through application structure, Mach-O details, dependency resolution, extracted strings, and bounded hex inspection. The screenshots were captured from Hexlora while statically inspecting `/Applications/Hexlora.app`.
 
 ## Install with Homebrew
 

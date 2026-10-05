@@ -13,7 +13,7 @@ El [README en inglés](README.md#detailed-support-matrix) es la fuente canónica
 
 ## Capturas
 
-[![Hexlora inspeccionando GrapeCompare.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
+[![Hexlora inspeccionando Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
 
 La [galería interactiva](https://xnu.app/hexlora/#gallery) alterna entre estructura, Mach-O, dependencias, strings y la inspección Hex acotada.
 
