@@ -1,6 +1,6 @@
 cask "hexlora" do
-  version "1.1.19"
-  sha256 "56f6108fb872939f14d6b59cf7e2620651263814fbcb56376724d3e196b4db9e"
+  version "1.1.20"
+  sha256 "06b0229f7c4ec61f7908168bb735fa5d8d4872df9830fb755834106f33f8556e"
 
   url "https://github.com/everettjf/homebrew-tap/releases/download/hexlora-v#{version}/Hexlora-#{version}-macos.zip"
   name "Hexlora"
