@@ -2462,7 +2462,7 @@ impl HexloraApp {
             .border_2()
             .border_color(rgb(BG))
             .drag_over::<ExternalPaths>(|style, _, _, _| {
-                style.bg(rgba(0x9bd26720)).border_color(rgb(GREEN))
+                style.bg(rgba(0x58ded020)).border_color(rgb(GREEN))
             })
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 if let Some(path) = paths.paths().first() {
@@ -3126,7 +3126,7 @@ impl HexloraApp {
             .child(panel_title("Entropy Profile"))
             .child(div().p_4().rounded_lg().border_1().border_color(rgb(BORDER)).bg(rgb(PANEL)).h(px(260.)).child(
                 AreaChart::new(chart_data).x(|item| item.label.clone()).y(|item| item.value)
-                    .stroke(rgb(GREEN)).fill(rgba(0x43e86b33))
+                    .stroke(rgb(GREEN)).fill(rgba(0x58ded033))
             ))
             .child(info_panel("Block heatmap", "Each cell is a distributed 64 KiB sample. Brighter orange cells approach 8 bits/byte and can indicate compression or encryption. Click a cell to inspect its bytes."))
             .child(div().flex().flex_wrap().gap_1().children(cells))
