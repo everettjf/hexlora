@@ -5337,6 +5337,14 @@ impl Render for HexloraApp {
                     .border_color(rgb(BORDER))
                     .text_xs()
                     .text_color(rgb(MUTED))
+                    .child(
+                        Button::new("discord-community")
+                            .label("Discord")
+                            .xsmall()
+                            .compact()
+                            .ghost()
+                            .on_click(|_, _, cx| cx.open_url("https://discord.gg/eGzEaP6TzR")),
+                    )
                     .child(self.status.clone())
                     .when_some(self.error.clone(), |d, e| {
                         d.child(div().text_color(rgb(DESTRUCTIVE)).child(e))
