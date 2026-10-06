@@ -33,7 +33,8 @@ pub const REPORT_SCHEMA_VERSION: u32 = 1;
 #[command(
     name = "hexlora-cli",
     version,
-    about = "Static application, package, and binary inspection"
+    about = "Static application, package, and binary inspection",
+    after_help = "Discord: https://discord.gg/eGzEaP6TzR"
 )]
 pub struct Cli {
     #[command(subcommand)]

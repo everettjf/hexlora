@@ -107,6 +107,7 @@ use theme::{
 actions!(
     hexlora,
     [
+        OpenDiscord,
         OpenFile,
         OpenArtifact,
         OpenWorkspace,
@@ -6628,6 +6629,10 @@ fn install_menus(cx: &mut App) {
             ],
         },
         Menu {
+            name: "Help".into(),
+            items: vec![MenuItem::action("Discord", OpenDiscord)],
+        },
+        Menu {
             name: "Window".into(),
             items: vec![],
         },
@@ -6694,6 +6699,7 @@ fn main() {
         cx.on_action(export_visual_report);
         cx.on_action(capture_window_screenshot);
         cx.on_action(open_recent_from_menu);
+        cx.on_action(|_: &OpenDiscord, cx: &mut App| cx.open_url("https://discord.gg/eGzEaP6TzR"));
         cx.bind_keys([
             KeyBinding::new("cmd-n", NewWindow, None),
             KeyBinding::new("cmd-o", OpenFile, None),

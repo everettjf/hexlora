@@ -1,5 +1,7 @@
 # Hexlora
 
+[Discord](https://discord.gg/eGzEaP6TzR)
+
 [English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · **Português (Brasil)** · [Español](README.es.md) · [Deutsch](README.de.md)
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#requisitos)
