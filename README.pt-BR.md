@@ -2,7 +2,7 @@
 
 [Discord](https://discord.gg/eGzEaP6TzR)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · **Português (Brasil)** · [Español](README.es.md) · [Deutsch](README.de.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Italiano](README.it.md) · **Português (Brasil)** · [Русский](README.ru.md) · [Tiếng Việt](README.vi.md)
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#requisitos)
 [![Licença](https://img.shields.io/badge/license-Apache--2.0-d7d3c6?style=flat-square)](LICENSE)
@@ -13,11 +13,15 @@ O app inclui Size Lab e treemaps interativos, gráfico de entropia com salto par
 
 O [README em inglês](README.md#detailed-support-matrix) é a fonte canônica e contém a matriz de suporte mais detalhada e atual. Instale a versão mais recente com os comandos Homebrew abaixo ou obtenha os arquivos no [GitHub Releases](https://github.com/everettjf/homebrew-tap/releases).
 
+## Idiomas da interface
+
+Hexlora oferece inglês, chinês simplificado, japonês, coreano, alemão, francês, espanhol, italiano, português do Brasil, russo e vietnamita. O menu de idioma na barra de menus ou no rodapé da janela altera a interface imediatamente e salva a escolha. Na primeira execução, o aplicativo segue o idioma do sistema. Navegação, botões, títulos de painéis e cabeçalhos comuns estão traduzidos. Conteúdos dos artefatos, diagnósticos técnicos e relatórios exportados mantêm o texto original.
+
 ## Capturas de tela
 
-[![Hexlora inspecionando Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
+[![Hexlora inspecionando Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/pt-BR/#gallery)
 
-A [galeria interativa](https://xnu.app/hexlora/#gallery) alterna entre estrutura do aplicativo, Mach-O, dependências, strings e inspeção Hex limitada.
+A [galeria interativa](https://xnu.app/hexlora/pt-BR/#gallery) alterna entre estrutura do aplicativo, Mach-O, dependências, strings e inspeção Hex limitada.
 
 ## Instalação com Homebrew
 
@@ -73,7 +77,7 @@ As profundidades são `lightweight`, `standard` e `deep`. Os códigos distinguem
 - macOS 13 Ventura ou posterior
 - Homebrew para os comandos acima
 
-O núcleo é independente do GPUI e inspeciona Windows PE e Linux ELF estaticamente no macOS. Empacotamento e UI nativos para Windows e Linux virão depois.
+O GitHub Releases oferece MSI e ZIP portátil para Windows x64, além de DEB e tar.gz portátil para Linux amd64. Esses pacotes de Windows e Linux ainda não têm assinatura de código; confira SHA256SUMS antes de instalar. O núcleo independente do sistema hospedeiro inspeciona PE e ELF estaticamente em todas as plataformas compatíveis.
 
 ## Limites de segurança
 
@@ -85,6 +89,6 @@ Além do workspace Rust completo, Clippy, Rust 1.88 mínimo, contratos de CLI/re
 
 ## Documentação
 
-[Estratégia](docs/product-strategy.md) · [Análise do produto e concorrentes](docs/product-analysis-roadmap.md) · [Plano IPAView](docs/ipa-convergence-plan.md) · [Testes](docs/testing.md) · [Site](https://xnu.app/hexlora/)
+[Estratégia](docs/product-strategy.md) · [Análise do produto e concorrentes](docs/product-analysis-roadmap.md) · [Plano IPAView](docs/ipa-convergence-plan.md) · [Testes](docs/testing.md) · [Site](https://xnu.app/hexlora/pt-BR/)
 
 O README em inglês é canônico; as traduções são sincronizadas quando mudam versão, instalação ou capacidades principais.

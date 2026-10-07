@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hexlora — Русский</title>
+  <meta name="description" content="Hexlora — кроссплатформенная среда на Rust для статического анализа, сравнения и аудита выпусков приложений и двоичных файлов. Приложения, каталоги, пакеты и отдельные файлы представлены как логические артефакты: их структура, метаданные, подписи, зависимости и сведения PE, Mach-O и ELF исследуются без запуска содержимого.">
+  <meta name="theme-color" content="#101415">
+  <meta property="og:title" content="Hexlora — Русский">
+  <meta property="og:description" content="Hexlora — кроссплатформенная среда на Rust для статического анализа, сравнения и аудита выпусков приложений и двоичных файлов. Приложения, каталоги, пакеты и отдельные файлы представлены как логические артефакты: их структура, метаданные, подписи, зависимости и сведения PE, Mach-O и ELF исследуются без запуска содержимого.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://xnu.app/hexlora/ru/">
+  <meta property="og:image" content="https://xnu.app/hexlora/assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://xnu.app/hexlora/ru/">
+  <link rel="alternate" hreflang="en" href="https://xnu.app/hexlora/">
+  <link rel="alternate" hreflang="zh-CN" href="https://xnu.app/hexlora/zh-CN/">
+  <link rel="alternate" hreflang="ja" href="https://xnu.app/hexlora/ja/">
+  <link rel="alternate" hreflang="ko" href="https://xnu.app/hexlora/ko/">
+  <link rel="alternate" hreflang="de" href="https://xnu.app/hexlora/de/">
+  <link rel="alternate" hreflang="fr" href="https://xnu.app/hexlora/fr/">
+  <link rel="alternate" hreflang="es" href="https://xnu.app/hexlora/es/">
+  <link rel="alternate" hreflang="it" href="https://xnu.app/hexlora/it/">
+  <link rel="alternate" hreflang="pt-BR" href="https://xnu.app/hexlora/pt-BR/">
+  <link rel="alternate" hreflang="ru" href="https://xnu.app/hexlora/ru/">
+  <link rel="alternate" hreflang="vi" href="https://xnu.app/hexlora/vi/">
+  <link rel="alternate" hreflang="x-default" href="https://xnu.app/hexlora/">
+  <link rel="icon" type="image/png" href="../assets/icons/favicon-64.png">
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="../styles.css?v=languages-11">
+  <link rel="stylesheet" href="../localized.css?v=languages-11">
+</head>
+<body class="localized-page">
+  <header class="nav">
+    <a class="brand" href="#top"><img class="brand-icon" src="../assets/icons/apple-touch-icon.png" alt=""><span>Hexlora</span></a>
+    <div class="localized-nav"><a href="https://github.com/everettjf/hexlora/releases/latest">Загрузки ↗</a><details class="language-picker"><summary>Язык · Русский</summary><nav aria-label="Язык"><a href="../" lang="en" hreflang="en">English</a><a href="../zh-CN/" lang="zh-CN" hreflang="zh-CN">简体中文</a><a href="../ja/" lang="ja" hreflang="ja">日本語</a><a href="../ko/" lang="ko" hreflang="ko">한국어</a><a href="../de/" lang="de" hreflang="de">Deutsch</a><a href="../fr/" lang="fr" hreflang="fr">Français</a><a href="../es/" lang="es" hreflang="es">Español</a><a href="../it/" lang="it" hreflang="it">Italiano</a><a href="../pt-BR/" lang="pt-BR" hreflang="pt-BR">Português (Brasil)</a><a href="../ru/" lang="ru" hreflang="ru" aria-current="page">Русский</a><a href="../vi/" lang="vi" hreflang="vi">Tiếng Việt</a></nav></details></div>
+  </header>
+  <main class="shell localized-main" id="top">
+    <section class="localized-intro"><p class="eyebrow">macOS · Windows · Linux</p><h1>Hexlora</h1><p class="lede">Hexlora — кроссплатформенная среда на Rust для статического анализа, сравнения и аудита выпусков приложений и двоичных файлов. Приложения, каталоги, пакеты и отдельные файлы представлены как логические артефакты: их структура, метаданные, подписи, зависимости и сведения PE, Mach-O и ELF исследуются без запуска содержимого.</p><div class="actions"><a class="button primary" href="https://github.com/everettjf/hexlora/releases/latest">Загрузки ↗</a><a class="button" href="https://github.com/everettjf/hexlora/blob/main/README.ru.md">Документация ↗</a></div></section>
+    <article class="localized-content"><p>Приложение предлагает интерактивные карты размеров, графики и тепловые карты энтропии с переходом к байтам, граф зависимостей, временные шкалы подписей, матрицы архитектур и конфиденциальности IPA, фильтры серьёзности, изменяемые панели и высокую контрастность. Доступен экспорт отчётов Markdown, PDF и SVG и снимков окна.</p>
+<p>Английский README служит основным источником и содержит подробную матрицу поддержки. Этот перевод описывает установку, основные возможности и границы безопасности.</p>
+<h2 id="языки-интерфейса">Языки интерфейса</h2>
+<p>Hexlora поддерживает английский, упрощённый китайский, японский, корейский, немецкий, французский, испанский, итальянский, бразильский португальский, русский и вьетнамский. Меню языка в строке меню или внизу окна мгновенно переключает интерфейс и сохраняет выбор. При первом запуске используется язык системы. Переведены навигация, кнопки, заголовки панелей и основные заголовки таблиц. Содержимое артефактов, техническая диагностика и экспортированные отчёты сохраняют исходный текст.</p>
+<h2 id="снимки-экрана">Снимки экрана</h2>
+<div class="inspector carousel localized-gallery" id="gallery" aria-label="Выбрать снимок" aria-roledescription="carousel" data-slide-label="Показать снимок"><div class="slides" aria-live="polite"><figure class="slide active"><img src="../assets/screenshots/overview.jpg" alt="Обзор · Hexlora"><figcaption><b>Обзор</b></figcaption></figure><figure class="slide"><img src="../assets/screenshots/executable.jpg" alt="Заголовки · Hexlora" loading="lazy"><figcaption><b>Заголовки</b></figcaption></figure><figure class="slide"><img src="../assets/screenshots/dependencies.jpg" alt="Граф зависимостей · Hexlora" loading="lazy"><figcaption><b>Граф зависимостей</b></figcaption></figure><figure class="slide"><img src="../assets/screenshots/strings.jpg" alt="Строки · Hexlora" loading="lazy"><figcaption><b>Строки</b></figcaption></figure><figure class="slide"><img src="../assets/screenshots/hex.jpg" alt="Hex · Hexlora" loading="lazy"><figcaption><b>Hex</b></figcaption></figure></div><button class="carousel-arrow previous" type="button" data-previous aria-label="Предыдущий снимок">←</button><button class="carousel-arrow next" type="button" data-next aria-label="Следующий снимок">→</button><div class="carousel-dots" role="tablist" aria-label="Выбрать снимок"></div></div>
+<p>Галерея показывает структуру приложений, сведения Mach-O, зависимости, извлечённые строки и просмотр байтов с ограниченным объёмом чтения.</p>
+<h2 id="установка-через-homebrew">Установка через Homebrew</h2>
+<pre><code class="language-sh">brew install --cask everettjf/tap/hexlora
+</code></pre>
+<p>Необязательный инструмент командной строки:</p>
+<pre><code class="language-sh">brew install everettjf/tap/hexlora-cli
+</code></pre>
+<p>Приложение macOS подписано сертификатом Developer ID, нотариально проверено Apple и содержит прикреплённый билет проверки. Выпуски проходят строгую проверку подписи, билета и Gatekeeper.</p>
+<h2 id="основные-возможности">Основные возможности</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Область</th>
+<th>Текущая поддержка</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>macOS / iOS</td>
+<td>Приложения macOS, пакеты, фреймворки, универсальный Mach-O, DMG и PKG/XAR; аудит IPA: идентификация, размеры, встроенные цели, архитектуры, языки, конфиденциальность, профили, права и результаты.</td>
+</tr>
+<tr>
+<td>Android</td>
+<td>Манифесты APK, сведения пакета и SDK, разрешения, экспортируемые компоненты, глубокие ссылки, статистика DEX, нативные библиотеки, ABI, индикаторы подписей и результаты.</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td>Заголовки, секции, импорты, экспорты, символы, зависимости и метаданные Authenticode PE/COFF; идентификация, возможности, приложения, точки входа и состояние подписи APPX/MSIX.</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td>Заголовки ELF, архитектуры, интерпретатор, секции, сегменты, релокации, символы и зависимости; метаданные DEB, файлы, установленный размер, служебные скрипты и привилегированные файлы.</td>
+</tr>
+<tr>
+<td>Контейнеры и данные</td>
+<td>ZIP, tar/tar.gz, ar, DMG, ISO, JSON, XML, plist, SQLite, изображения и текст. 7z, RAR и самостоятельные сжатые потоки распознаются, но пока не поддерживают полноценный просмотр содержимого.</td>
+</tr>
+<tr>
+<td>Общий анализ</td>
+<td>Дерево артефактов, метаданные, заголовки, архитектурные срезы, секции, сегменты, символы, зависимости, строки, просмотр Hex по запросу, хеши, энтропия, подписи и результаты.</td>
+</tr>
+<tr>
+<td>Сравнение и CI</td>
+<td>Точная идентификация SHA-256; добавленные, удалённые, изменённые и перемещённые файлы, рост и дубликаты; JSON, Markdown, HTML, SARIF, политики выпуска, пороги серьёзности и стабильные коды завершения.</td>
+</tr>
+</tbody></table></div>
+<p><a href="https://github.com/everettjf/hexlora/blob/main/README.md#detailed-support-matrix">Подробная матрица поддержки (английский)</a> · <a href="https://github.com/everettjf/hexlora/blob/main/docs/report-schema.md">Схема отчётов (английский)</a> · <a href="https://github.com/everettjf/hexlora/blob/main/docs/testing.md">Матрица тестов (английский)</a></p>
+<h2 id="работа-с-приложением">Работа с приложением</h2>
+<p>Открывайте или перетаскивайте файлы, приложения, пакеты, каталоги и рабочие области. Меняйте размеры панелей и просматривайте большие виртуализированные таблицы. Рабочие области сохраняют пути, выбранный вид, закладки, заметки и кеш анализа. Совместимые внешние инструменты запускаются только по запросу.</p>
+<p>Сочетания macOS: <code>⌘N</code> новое окно, <code>⌘O</code> файл, <code>⇧⌘O</code> папка, <code>⌥⌘O</code> рабочая область, <code>⌘S</code> сохранить, <code>⌘F</code> поиск.</p>
+<h2 id="cli">CLI</h2>
+<pre><code class="language-sh">hexlora-cli inspect ./SomeApp.app --pretty
+hexlora-cli inspect ./MyApp.ipa --depth deep --format sarif --output hexlora.sarif
+hexlora-cli inspect ./package --hash sha256 --strings --entropy
+</code></pre>
+<p>Глубина анализа: <code>lightweight</code>, <code>standard</code> и <code>deep</code>. Коды завершения: фатальная ошибка <code>1</code>, нарушение политики или порога <code>2</code>, отмена <code>4</code>, пригодный частичный отчёт <code>5</code>.</p>
+<h2 id="платформы-и-требования">Платформы и требования</h2>
+<p>macOS 13 Ventura и новее на Apple silicon (<code>arm64</code>), Windows x64 или Linux amd64. Для приведённых команд установки macOS нужен Homebrew.</p>
+<p>GitHub Releases содержит MSI и переносимый ZIP для Windows, DEB и переносимый tar.gz для Linux. Пакеты Windows и Linux пока не подписаны: перед установкой проверьте SHA256SUMS. Движок анализирует PE и ELF на всех поддерживаемых платформах.</p>
+<p><a href="https://github.com/everettjf/hexlora/releases/latest">Загрузки</a> · <a href="https://github.com/everettjf/hexlora/releases/latest/download/SHA256SUMS">SHA256SUMS</a></p>
+<h2 id="границы-безопасности">Границы безопасности</h2>
+<p>Hexlora работает статически и только для чтения. Он не запускает импортированные программы, не монтирует образы дисков, не устанавливает пакеты и не извлекает архивы автоматически. Он не декомпилирует, не отлаживает и не меняет байты. Символические ссылки не обходятся. Для входных данных, рекурсии, файлов, строк и вывода команд заданы явные ограничения. Эвристические результаты — подсказки, а не вердикты о вредоносности.</p>
+<h2 id="автоматическая-проверка">Автоматическая проверка</h2>
+<p>CI проверяет рабочую область Rust, Clippy, минимальную версию Rust 1.88, контракты CLI и отчётов, сборку и запуск приложения macOS. Публичный корпус с зафиксированными размерами и SHA-256 охватывает 16 реальных артефактов. Выпуски macOS дополнительно проверяют Developer ID, нотариальную проверку Apple, билет, Gatekeeper, установку Homebrew и тест формулы.</p>
+<h2 id="документация">Документация</h2>
+<p><a href="https://github.com/everettjf/hexlora/blob/main/docs/product-strategy.md">Стратегия продукта</a> · <a href="https://github.com/everettjf/hexlora/blob/main/README.md#detailed-support-matrix">Подробная матрица поддержки (английский)</a> · <a href="https://github.com/everettjf/hexlora/blob/main/docs/report-schema.md">Схема отчётов (английский)</a> · <a href="https://github.com/everettjf/hexlora/blob/main/docs/testing.md">Матрица тестов (английский)</a> · <a href="https://xnu.app/hexlora/ru/">Сайт</a></p>
+</article>
+  </main>
+  <script src="../carousel.js" defer></script>
+  <footer class="shell"><a class="brand" href="#top">Hexlora</a><p>Только статический анализ. Индикаторы не являются вердиктом о вредоносности.</p><p><a href="https://discord.gg/eGzEaP6TzR">Discord</a> · © 2026 Hexlora · Apache-2.0</p></footer>
+</body>
+</html>

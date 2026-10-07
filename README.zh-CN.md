@@ -2,7 +2,7 @@
 
 [Discord](https://discord.gg/eGzEaP6TzR)
 
-[English](README.md) · **简体中文** · [日本語](README.ja.md) · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md) · [Deutsch](README.de.md)
+[English](README.md) · **简体中文** · [日本語](README.ja.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Italiano](README.it.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [Tiếng Việt](README.vi.md)
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#系统要求)
 [![许可证](https://img.shields.io/badge/license-Apache--2.0-d7d3c6?style=flat-square)](LICENSE)
@@ -13,11 +13,15 @@ Hexlora 是一个使用 Rust 编写的跨平台软件制品安全静态分诊、
 
 英文 [README](README.md#detailed-support-matrix) 是能力清单的规范源，并包含最新、最详细的逐项支持矩阵。安装最新版请使用下方 Homebrew 命令，发布文件见 [GitHub Releases](https://github.com/everettjf/homebrew-tap/releases)。
 
+## 界面语言
+
+Hexlora 支持英文、简体中文、日文、韩文、德文、法文、西班牙文、意大利文、巴西葡萄牙文、俄文和越南文。通过菜单栏或窗口底部的“语言”菜单即时切换，选择会自动保存。首次启动跟随系统语言。导航、按钮、面板标题和常用表头已本地化；制品原始内容、技术解析诊断和导出报告数据保留原文。
+
 ## 截图
 
-[![Hexlora 正在检查 Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
+[![Hexlora 正在检查 Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/zh-CN/#gallery)
 
-[在线图库](https://xnu.app/hexlora/#gallery) 会动态展示应用结构、Mach-O 信息、依赖解析、字符串提取和有界 Hex 查看。
+[在线图库](https://xnu.app/hexlora/zh-CN/#gallery) 会动态展示应用结构、Mach-O 信息、依赖解析、字符串提取和有界 Hex 查看。
 
 ## 安装
 
@@ -98,10 +102,6 @@ Hexlora 是只读静态分析工具：不会执行导入程序、挂载镜像、
 - [现状与竞品分析](docs/product-analysis-roadmap.md)
 - [IPAView 融合计划](docs/ipa-convergence-plan.md)
 - [自动化测试矩阵](docs/testing.md)
-- [GitHub Pages](https://xnu.app/hexlora/)
+- [GitHub Pages](https://xnu.app/hexlora/zh-CN/)
 
 英文 README 是规范源；本地化页面在版本、安装方式或能力发生变化时同步更新。
-
-## 界面语言
-
-Hexlora 支持英文、简体中文、日文、韩文、德文、法文、西班牙文、意大利文、巴西葡萄牙文、俄文和越南文。通过菜单栏或窗口底部的“语言”菜单即时切换，选择会自动保存。首次启动跟随系统语言。导航、按钮、面板标题和常用表头已本地化；制品原始内容、技术解析诊断和导出报告数据保留原文。

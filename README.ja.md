@@ -2,7 +2,7 @@
 
 [Discord](https://discord.gg/eGzEaP6TzR)
 
-[English](README.md) · [简体中文](README.zh-CN.md) · **日本語** · [Português (Brasil)](README.pt-BR.md) · [Español](README.es.md) · [Deutsch](README.de.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · **日本語** · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Italiano](README.it.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [Tiếng Việt](README.vi.md)
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#動作要件)
 [![License](https://img.shields.io/badge/license-Apache--2.0-d7d3c6?style=flat-square)](LICENSE)
@@ -13,11 +13,15 @@ Hexlora は Rust で実装された、クロスプラットフォームのソフ
 
 最新かつ詳細な項目別一覧は、正規版である英語の[サポートマトリクス](README.md#detailed-support-matrix)を参照してください。最新版は下記の Homebrew コマンド、または [GitHub Releases](https://github.com/everettjf/homebrew-tap/releases)から入手できます。
 
+## インターフェース言語
+
+英語、簡体字中国語、日本語、韓国語、ドイツ語、フランス語、スペイン語、イタリア語、ブラジルポルトガル語、ロシア語、ベトナム語に対応しています。メニューバーまたはウインドウ下部の言語メニューで即座に切り替えられ、選択は次回起動時にも保持されます。初回はシステム言語に従います。ナビゲーション、ボタン、パネル見出し、主な表の見出しを翻訳しています。解析対象の内容、技術的な診断、書き出したレポートは原文のままです。
+
 ## スクリーンショット
 
-[![Hexlora.app を検査する Hexlora](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
+[![Hexlora.app を検査する Hexlora](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/ja/#gallery)
 
-[ライブギャラリー](https://xnu.app/hexlora/#gallery)では、アプリ構造、Mach-O、依存関係、抽出文字列、範囲限定 Hex ビューを切り替えて確認できます。
+[ライブギャラリー](https://xnu.app/hexlora/ja/#gallery)では、アプリ構造、Mach-O、依存関係、抽出文字列、範囲限定 Hex ビューを切り替えて確認できます。
 
 ## Homebrew でインストール
 
@@ -73,7 +77,7 @@ hexlora-cli inspect ./package --hash sha256 --strings --entropy
 - macOS 13 Ventura 以降
 - 上記インストールには Homebrew
 
-コア解析層は GPUI に依存せず、macOS 上で Windows PE と Linux ELF を静的解析できます。Windows / Linux ネイティブ UI と配布パッケージは今後の対象です。
+Windows x64 用の MSI・ポータブル ZIP と Linux amd64 用の DEB・ポータブル tar.gz は GitHub Releases から入手できます。Windows と Linux の配布物は現在コード署名されていないため、インストール前に SHA256SUMS を確認してください。コア解析層はホストに依存せず、対応するすべての OS で PE と ELF を静的解析できます。
 
 ## 安全境界
 
@@ -85,6 +89,6 @@ Rust workspace 全体、Clippy、Rust 1.88 の MSRV、CLI/レポート契約、m
 
 ## ドキュメント
 
-[製品戦略](docs/product-strategy.md) · [現状・競合分析](docs/product-analysis-roadmap.md) · [IPAView 統合計画](docs/ipa-convergence-plan.md) · [テストマトリクス](docs/testing.md) · [Web サイト](https://xnu.app/hexlora/)
+[製品戦略](docs/product-strategy.md) · [現状・競合分析](docs/product-analysis-roadmap.md) · [IPAView 統合計画](docs/ipa-convergence-plan.md) · [テストマトリクス](docs/testing.md) · [Web サイト](https://xnu.app/hexlora/ja/)
 
 英語 README が正規版です。バージョン、インストール方法、主要機能の変更時には翻訳版も同期します。

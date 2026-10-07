@@ -1,0 +1,14 @@
+{
+  "name": "hexlora-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:locales": "node ../scripts/build-localized-site.mjs"
+  },
+  "devDependencies": {
+    "marked": "17.0.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

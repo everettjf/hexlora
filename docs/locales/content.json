@@ -1,0 +1,123 @@
+{
+  "en": {
+    "language": "Language",
+    "download": "Downloads",
+    "website": "Website",
+    "readme": "README",
+    "footer": "Static inspection only. Indicators are not malware verdicts.",
+    "previous": "Previous screenshot",
+    "next": "Next screenshot",
+    "chooseScreenshot": "Choose screenshot",
+    "showScreenshot": "Show screenshot"
+  },
+  "zh-CN": {
+    "language": "语言",
+    "download": "下载",
+    "website": "网站",
+    "readme": "说明文档",
+    "footer": "仅静态检查。指标并不代表恶意软件判定。",
+    "previous": "上一张截图",
+    "next": "下一张截图",
+    "chooseScreenshot": "选择截图",
+    "showScreenshot": "显示截图"
+  },
+  "ja": {
+    "language": "言語",
+    "download": "ダウンロード",
+    "website": "ウェブサイト",
+    "readme": "説明書",
+    "footer": "静的検査のみ。指標はマルウェアの判定ではありません。",
+    "previous": "前のスクリーンショット",
+    "next": "次のスクリーンショット",
+    "chooseScreenshot": "スクリーンショットを選択",
+    "showScreenshot": "スクリーンショットを表示"
+  },
+  "de": {
+    "language": "Sprache",
+    "download": "Downloads",
+    "website": "Website",
+    "readme": "Dokumentation",
+    "footer": "Nur statische Prüfung. Indikatoren sind keine Malware-Urteile.",
+    "previous": "Vorheriger Screenshot",
+    "next": "Nächster Screenshot",
+    "chooseScreenshot": "Screenshot auswählen",
+    "showScreenshot": "Screenshot anzeigen"
+  },
+  "es": {
+    "language": "Idioma",
+    "download": "Descargas",
+    "website": "Sitio web",
+    "readme": "Documentación",
+    "footer": "Solo inspección estática. Los indicadores no son veredictos de malware.",
+    "previous": "Captura anterior",
+    "next": "Captura siguiente",
+    "chooseScreenshot": "Elegir captura",
+    "showScreenshot": "Mostrar captura"
+  },
+  "pt-BR": {
+    "language": "Idioma",
+    "download": "Downloads",
+    "website": "Site",
+    "readme": "Documentação",
+    "footer": "Somente inspeção estática. Indicadores não são vereditos de malware.",
+    "previous": "Captura anterior",
+    "next": "Próxima captura",
+    "chooseScreenshot": "Escolher captura",
+    "showScreenshot": "Mostrar captura"
+  },
+  "fr": {
+    "language": "Langue",
+    "download": "Téléchargements",
+    "website": "Site web",
+    "readme": "Documentation",
+    "footer": "Inspection statique uniquement. Les indicateurs ne constituent pas un verdict de logiciel malveillant.",
+    "previous": "Capture précédente",
+    "next": "Capture suivante",
+    "chooseScreenshot": "Choisir une capture",
+    "showScreenshot": "Afficher la capture"
+  },
+  "ko": {
+    "language": "언어",
+    "download": "다운로드",
+    "website": "웹사이트",
+    "readme": "설명서",
+    "footer": "정적 검사만 수행합니다. 지표는 악성코드 판정이 아닙니다.",
+    "previous": "이전 스크린샷",
+    "next": "다음 스크린샷",
+    "chooseScreenshot": "스크린샷 선택",
+    "showScreenshot": "스크린샷 표시"
+  },
+  "it": {
+    "language": "Lingua",
+    "download": "Download",
+    "website": "Sito web",
+    "readme": "Documentazione",
+    "footer": "Solo ispezione statica. Gli indicatori non sono verdetti di malware.",
+    "previous": "Schermata precedente",
+    "next": "Schermata successiva",
+    "chooseScreenshot": "Scegli schermata",
+    "showScreenshot": "Mostra schermata"
+  },
+  "ru": {
+    "language": "Язык",
+    "download": "Загрузки",
+    "website": "Сайт",
+    "readme": "Документация",
+    "footer": "Только статический анализ. Индикаторы не являются вердиктом о вредоносности.",
+    "previous": "Предыдущий снимок",
+    "next": "Следующий снимок",
+    "chooseScreenshot": "Выбрать снимок",
+    "showScreenshot": "Показать снимок"
+  },
+  "vi": {
+    "language": "Ngôn ngữ",
+    "download": "Tải xuống",
+    "website": "Trang web",
+    "readme": "Tài liệu",
+    "footer": "Chỉ kiểm tra tĩnh. Các dấu hiệu không phải kết luận về mã độc.",
+    "previous": "Ảnh trước",
+    "next": "Ảnh tiếp theo",
+    "chooseScreenshot": "Chọn ảnh",
+    "showScreenshot": "Hiển thị ảnh"
+  }
+}

@@ -14,3 +14,6 @@ hexlora-analysis.pdf
 
 # Local command and test logs
 *.log
+
+# Website generation dependencies
+/docs/node_modules/
