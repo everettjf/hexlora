@@ -15,7 +15,7 @@ const readmeName = code => code === 'en' ? 'README.md' : `README.${code}.md`;
 const alternates = languages.map(([code]) => `<link rel="alternate" hreflang="${code}" href="${pageUrl(code)}">`).join('\n  ') + '\n  <link rel="alternate" hreflang="x-default" href="https://xnu.app/hexlora/">';
 function picker(code, prefix) {
   const label = content[code].language;
-  return `<details class="language-picker"><summary>${escape(label)} · ${escape(languages.find(([c]) => c === code)[1])}</summary><nav aria-label="${escape(label)}">${languages.map(([c, name]) => `<a href="${prefix}${c === 'en' ? '' : `${c}/`}" lang="${c}" hreflang="${c}"${c === code ? ' aria-current="page"' : ''}>${escape(name)}</a>`).join('')}</nav></details>`;
+  return `<details class="language-picker"><summary>${escape(languages.find(([c]) => c === code)[1])}</summary><nav aria-label="${escape(label)}">${languages.map(([c, name]) => `<a href="${prefix}${c === 'en' ? '' : `${c}/`}" lang="${c}" hreflang="${c}"${c === code ? ' aria-current="page"' : ''}>${escape(name)}</a>`).join('')}</nav></details>`;
 }
 const marked = new Marked({ gfm:true, renderer: {
   heading({tokens,depth}) {
