@@ -15,6 +15,7 @@ use gpui_component::{
     tab::{Tab, TabBar},
 };
 use hexlora::file_search::{FileSearchMode, parse_search_bytes};
+use hexlora::i18n::{self, t};
 use hexlora::report_export::{
     ReportBlock, ReportDocument, ReportSection, render_markdown as render_analysis_markdown,
     render_pdf as render_analysis_pdf,
@@ -151,6 +152,7 @@ impl Global for WindowViews {}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 struct UiPreferences {
+    language: Option<String>,
     show_sidebar: bool,
     show_inspector: bool,
     high_contrast: bool,
@@ -161,6 +163,7 @@ struct UiPreferences {
 impl Default for UiPreferences {
     fn default() -> Self {
         Self {
+            language: None,
             show_sidebar: true,
             show_inspector: true,
             high_contrast: false,
@@ -374,10 +377,10 @@ impl HexloraApp {
         focus_handle.focus(window);
         let search_input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Search artifact, symbols, strings, or enter hex bytes…")
+                .placeholder(t("Search artifact, symbols, strings, or enter hex bytes…"))
         });
         let note_input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("Add or replace note for selected node…")
+            InputState::new(window, cx).placeholder(t("Add or replace note for selected node…"))
         });
         let search_subscription = cx.subscribe(&search_input, |this, input, event, cx| {
             if matches!(event, InputEvent::Change) {
@@ -485,7 +488,7 @@ impl HexloraApp {
     }
     fn choose_comparison(&mut self, folders: bool, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
-            let baseline = rfd::AsyncFileDialog::new().set_title("Choose baseline artifact");
+            let baseline = rfd::AsyncFileDialog::new().set_title(t("Choose baseline artifact"));
             let before = if folders {
                 baseline.pick_folder().await
             } else {
@@ -494,7 +497,7 @@ impl HexloraApp {
             let Some(before) = before else {
                 return anyhow::Ok(());
             };
-            let candidate = rfd::AsyncFileDialog::new().set_title("Choose candidate artifact");
+            let candidate = rfd::AsyncFileDialog::new().set_title(t("Choose candidate artifact"));
             let after = if folders {
                 candidate.pick_folder().await
             } else {
@@ -1667,13 +1670,9 @@ impl HexloraApp {
                 .border_l_1()
                 .border_color(rgb(BORDER))
                 .child(section_header("DETAILS"))
-                .child(
-                    div()
-                        .p_4()
-                        .text_xs()
-                        .text_color(rgb(MUTED))
-                        .child("Select an Artifact node to inspect properties and actions."),
-                )
+                .child(div().p_4().text_xs().text_color(rgb(MUTED)).child(t(
+                    "Select an Artifact node to inspect properties and actions.",
+                )))
                 .into_any_element();
         }
         let selected_path = self
@@ -1783,10 +1782,10 @@ impl HexloraApp {
                     .gap_2()
                     .child(
                         Button::new("bookmark-selected")
-                            .label("Add Bookmark")
+                            .label(t("Add Bookmark"))
                             .on_click(cx.listener(|this, _, _, cx| this.add_bookmark(cx))),
                     )
-                    .child(div().text_xs().text_color(rgb(MUTED)).child("NODE NOTE"))
+                    .child(div().text_xs().text_color(rgb(MUTED)).child(t("NODE NOTE")))
                     .when_some(existing_note, |d, note| {
                         d.child(
                             div()
@@ -1805,12 +1804,12 @@ impl HexloraApp {
                     )
                     .child(
                         Button::new("save-node-note")
-                            .label("Save Note")
+                            .label(t("Save Note"))
                             .on_click(cx.listener(|this, _, _, cx| this.save_note(cx))),
                     )
                     .child(
                         Button::new("compute-all-hashes")
-                            .label("Compute hashes + entropy")
+                            .label(t("Compute hashes + entropy"))
                             .disabled(!self.selected_node().is_some_and(ArtifactNode::is_file))
                             .on_click(cx.listener(|this, _, _, cx| this.compute_all_hashes(cx))),
                     )
@@ -1818,7 +1817,7 @@ impl HexloraApp {
                         div()
                             .text_xs()
                             .text_color(rgb(MUTED))
-                            .child("SHA-1 and MD5 are provided for identification only."),
+                            .child(t("SHA-1 and MD5 are provided for identification only.")),
                     ),
             )
             .child(section_header("BOOKMARKS"))
@@ -1989,6 +1988,7 @@ impl HexloraApp {
     fn save_ui_preferences(&self) {
         let stored = load_ui_preferences();
         let _ = store_ui_preferences(&UiPreferences {
+            language: stored.language,
             show_sidebar: self.show_sidebar,
             show_inspector: self.show_inspector,
             high_contrast: self.high_contrast,
@@ -2386,7 +2386,7 @@ impl HexloraApp {
         let report = visual_report_svg(root, findings);
         self.prompt_path(
             rfd::AsyncFileDialog::new()
-                .set_title("Export Hexlora Visual Report")
+                .set_title(t("Export Hexlora Visual Report"))
                 .set_file_name("hexlora-visual-report.svg")
                 .add_filter("Scalable Vector Graphic", &["svg"]),
             DialogKind::Save,
@@ -2409,7 +2409,7 @@ impl HexloraApp {
     fn capture_window_screenshot(&mut self, cx: &mut Context<Self>) {
         self.prompt_path(
             rfd::AsyncFileDialog::new()
-                .set_title("Save Hexlora Window Screenshot")
+                .set_title(t("Save Hexlora Window Screenshot"))
                 .set_file_name("hexlora-window.png")
                 .add_filter("PNG image", &["png"]),
             DialogKind::Save,
@@ -2515,7 +2515,7 @@ impl HexloraApp {
                                         .unwrap_or(0),
                                     _ => 0,
                                 };
-                                Tab::new().label(tab.label()).suffix(
+                                Tab::new().label(t(tab.label())).suffix(
                                     Badge::new().count(finding_count).color(rgb(DESTRUCTIVE)),
                                 )
                             }))
@@ -4116,7 +4116,7 @@ impl HexloraApp {
                     .text_2xl()
                     .font_semibold()
                     .text_color(rgb(TEXT))
-                    .child("iOS Release Audit"),
+                    .child(t("iOS Release Audit")),
             )
             .child(
                 div()
@@ -4252,11 +4252,11 @@ impl HexloraApp {
                             .text_xs()
                             .font_semibold()
                             .text_color(rgb(MUTED))
-                            .child(div().w(px(220.)).child("TARGET"))
+                            .child(div().w(px(220.)).child(t("TARGET")))
                             .children(architectures.into_iter().map(|architecture| {
                                 div().w(px(88.)).text_center().child(architecture)
                             }))
-                            .child(div().w(px(88.)).text_center().child("PRIVACY")),
+                            .child(div().w(px(88.)).text_center().child(t("PRIVACY"))),
                     )
                     .children(rows)
             });
@@ -4592,7 +4592,7 @@ impl HexloraApp {
                                 .mt_1()
                                 .text_sm()
                                 .text_color(rgb(MUTED))
-                                .child("Explore where artifact size is concentrated."),
+                                .child(t("Explore where artifact size is concentrated.")),
                         ),
                     )
                     .child(
@@ -5165,23 +5165,23 @@ impl Render for HexloraApp {
                             )
                             .child(
                                 Button::new("search-all")
-                                    .label("Search Artifact")
+                                    .label(t("Search Artifact"))
                                     .primary()
                                     .xsmall()
                                     .compact()
-                                    .tooltip("Search the entire artifact (Return)")
+                                    .tooltip(t("Search the entire artifact (Return)"))
                                     .on_click(cx.listener(|this, _, _, cx| this.search_all(cx))),
                             )
                             .child(
                                 Button::new("search-mode-text")
                                     .label(if self.file_search_mode == FileSearchMode::Text {
-                                        "Text ✓"
+                                        t("Text ✓")
                                     } else {
-                                        "Text"
+                                        t("Text")
                                     })
                                     .xsmall()
                                     .compact()
-                                    .tooltip("Interpret the query as text")
+                                    .tooltip(t("Interpret the query as text"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.file_search_mode = FileSearchMode::Text;
                                         cx.notify();
@@ -5190,13 +5190,13 @@ impl Render for HexloraApp {
                             .child(
                                 Button::new("search-mode-bytes")
                                     .label(if self.file_search_mode == FileSearchMode::Bytes {
-                                        "Bytes ✓"
+                                        t("Bytes ✓")
                                     } else {
-                                        "Bytes"
+                                        t("Bytes")
                                     })
                                     .xsmall()
                                     .compact()
-                                    .tooltip("Interpret the query as hexadecimal bytes")
+                                    .tooltip(t("Interpret the query as hexadecimal bytes"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.file_search_mode = FileSearchMode::Bytes;
                                         cx.notify();
@@ -5204,31 +5204,31 @@ impl Render for HexloraApp {
                             )
                             .child(
                                 Button::new("find-next")
-                                    .label("Find Next")
+                                    .label(t("Find Next"))
                                     .xsmall()
                                     .compact()
                                     .ghost()
-                                    .tooltip("Select the next search result")
+                                    .tooltip(t("Select the next search result"))
                                     .on_click(cx.listener(|this, _, _, cx| this.find_next(cx))),
                             )
                             .child(
                                 Button::new("jump-offset")
-                                    .label("Jump Offset")
+                                    .label(t("Jump Offset"))
                                     .xsmall()
                                     .compact()
                                     .ghost()
-                                    .tooltip("Jump to a hexadecimal file offset")
+                                    .tooltip(t("Jump to a hexadecimal file offset"))
                                     .on_click(
                                         cx.listener(|this, _, _, cx| this.jump_to_offset(cx)),
                                     ),
                             )
                             .child(
                                 Button::new("copy-hex")
-                                    .label("Copy Hex")
+                                    .label(t("Copy Hex"))
                                     .xsmall()
                                     .compact()
                                     .ghost()
-                                    .tooltip("Copy the visible hexadecimal chunk")
+                                    .tooltip(t("Copy the visible hexadecimal chunk"))
                                     .on_click(
                                         cx.listener(|this, _, _, cx| this.copy_hex_chunk(cx)),
                                     ),
@@ -5237,8 +5237,8 @@ impl Render for HexloraApp {
                                 DropdownButton::new("export-analysis-report")
                                     .button(
                                         Button::new("export-report-label")
-                                            .label("Export Report")
-                                            .tooltip("Export the complete available analysis"),
+                                            .label(t("Export Report"))
+                                            .tooltip(t("Export the complete available analysis")),
                                     )
                                     .primary()
                                     .xsmall()
@@ -5280,11 +5280,14 @@ impl Render for HexloraApp {
                                             .child(Progress::new().value(62.).bg(rgb(GREEN))),
                                     )
                                     .child(
-                                        div().text_xs().text_color(rgb(ACCENT)).child("Analyzing…"),
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(ACCENT))
+                                            .child(t("Analyzing…")),
                                     )
                                     .child(
                                         Button::new("cancel-task")
-                                            .label("Cancel")
+                                            .label(t("Cancel"))
                                             .xsmall()
                                             .compact()
                                             .on_click(cx.listener(|this, _, _, cx| {
@@ -5345,7 +5348,27 @@ impl Render for HexloraApp {
                             .ghost()
                             .on_click(|_, _, cx| cx.open_url("https://discord.gg/eGzEaP6TzR")),
                     )
-                    .child(self.status.clone())
+                    .child(
+                        Button::new("language-picker")
+                            .label(t("Language"))
+                            .xsmall()
+                            .compact()
+                            .ghost()
+                            .dropdown_menu(|menu, _, _| {
+                                i18n::LANGUAGES.iter().fold(menu, |menu, (code, name)| {
+                                    let code = (*code).to_owned();
+                                    menu.item(PopupMenuItem::new(*name).on_click(
+                                        move |_, _, cx| {
+                                            change_language(
+                                                &SetLanguage { code: code.clone() },
+                                                cx,
+                                            );
+                                        },
+                                    ))
+                                })
+                            }),
+                    )
+                    .child(t(&self.status))
                     .when_some(self.error.clone(), |d, e| {
                         d.child(div().text_color(rgb(DESTRUCTIVE)).child(e))
                     }),
@@ -5415,6 +5438,7 @@ fn kind_icon(kind: ArtifactKind) -> &'static str {
     }
 }
 fn section_header(text: &'static str) -> impl IntoElement {
+    let text = t(text);
     div()
         .h(px(38.))
         .flex()
@@ -5426,11 +5450,13 @@ fn section_header(text: &'static str) -> impl IntoElement {
         .child(text)
 }
 fn panel_title(text: impl Into<SharedString>) -> impl IntoElement {
+    let text: SharedString = text.into();
+    let text = t(text.as_ref());
     div()
         .text_lg()
         .font_semibold()
         .text_color(rgb(TEXT))
-        .child(text.into())
+        .child(text)
 }
 fn kv_panel(title: &'static str, values: Vec<(String, String)>) -> impl IntoElement {
     div()
@@ -5457,7 +5483,7 @@ fn kv_panel(title: &'static str, values: Vec<(String, String)>) -> impl IntoElem
                                 .px_3()
                                 .text_sm()
                                 .text_color(rgb(MUTED))
-                                .child(k),
+                                .child(t(k)),
                         )
                         .child(
                             div()
@@ -5536,7 +5562,7 @@ fn lazy_table_panel(
                                 .text_xs()
                                 .font_semibold()
                                 .text_color(rgb(MUTED))
-                                .child(*h)
+                                .child(t(*h))
                         })),
                 )
                 .child(
@@ -5620,7 +5646,7 @@ fn info_panel(title: &'static str, text: impl Into<SharedString>) -> impl IntoEl
                 .border_color(rgb(BORDER))
                 .text_sm()
                 .text_color(rgb(MUTED))
-                .child(text.into()),
+                .child(t(text.into().as_ref())),
         )
 }
 fn empty_state() -> impl IntoElement {
@@ -5637,13 +5663,11 @@ fn empty_state() -> impl IntoElement {
                 .text_base()
                 .font_medium()
                 .text_color(rgb(TEXT))
-                .child("Drop a file or folder here to inspect"),
+                .child(t("Drop a file or folder here to inspect")),
         )
-        .child(
-            div()
-                .text_sm()
-                .child("Applications, packages, binaries, and Hexlora workspaces are supported"),
-        )
+        .child(div().text_sm().child(t(
+            "Applications, packages, binaries, and Hexlora workspaces are supported",
+        )))
 }
 fn fmt_addr(v: u64) -> String {
     format!("0x{v:016x}")
@@ -6576,72 +6600,94 @@ fn install_menus(cx: &mut App) {
         })
         .collect::<Vec<_>>();
     let recent_menu = MenuItem::submenu(Menu {
-        name: "Open Recent".into(),
+        name: t("Open Recent").into(),
         items: recent_items,
     });
     cx.set_menus(vec![
         Menu {
             name: "Hexlora".into(),
             items: vec![
-                MenuItem::os_submenu("Services", SystemMenuType::Services),
+                MenuItem::os_submenu(t("Services"), SystemMenuType::Services),
                 MenuItem::separator(),
-                MenuItem::action("Quit Hexlora", Quit),
+                MenuItem::action(t("Quit Hexlora"), Quit),
             ],
         },
         Menu {
-            name: "File".into(),
+            name: t("File").into(),
             items: vec![
-                MenuItem::action("New Window", NewWindow),
+                MenuItem::action(t("New Window"), NewWindow),
                 MenuItem::separator(),
-                MenuItem::action("Open File…", OpenFile),
-                MenuItem::action("Open Folder…", OpenArtifact),
+                MenuItem::action(t("Open File…"), OpenFile),
+                MenuItem::action(t("Open Folder…"), OpenArtifact),
                 recent_menu,
-                MenuItem::action("Open Workspace…", OpenWorkspace),
-                MenuItem::action("Open Release Policy…", OpenPolicy),
+                MenuItem::action(t("Open Workspace…"), OpenWorkspace),
+                MenuItem::action(t("Open Release Policy…"), OpenPolicy),
                 MenuItem::separator(),
-                MenuItem::action("Compare Artifacts…", CompareArtifacts),
-                MenuItem::action("Compare Folders…", CompareFolders),
+                MenuItem::action(t("Compare Artifacts…"), CompareArtifacts),
+                MenuItem::action(t("Compare Folders…"), CompareFolders),
                 MenuItem::separator(),
-                MenuItem::action("Save Workspace…", SaveWorkspace),
-                MenuItem::action("Export Markdown Report…", ExportMarkdownReport),
-                MenuItem::action("Export PDF Report…", ExportPdfReport),
-                MenuItem::action("Export Visual Report…", ExportVisualReport),
-                MenuItem::action("Capture Window Screenshot…", CaptureWindowScreenshot),
+                MenuItem::action(t("Save Workspace…"), SaveWorkspace),
+                MenuItem::action(t("Export Markdown Report…"), ExportMarkdownReport),
+                MenuItem::action(t("Export PDF Report…"), ExportPdfReport),
+                MenuItem::action(t("Export Visual Report…"), ExportVisualReport),
+                MenuItem::action(t("Capture Window Screenshot…"), CaptureWindowScreenshot),
             ],
         },
         Menu {
-            name: "Edit".into(),
+            name: t("Edit").into(),
             items: vec![
-                MenuItem::os_action("Undo", Undo, OsAction::Undo),
-                MenuItem::os_action("Redo", Redo, OsAction::Redo),
+                MenuItem::os_action(t("Undo"), Undo, OsAction::Undo),
+                MenuItem::os_action(t("Redo"), Redo, OsAction::Redo),
                 MenuItem::separator(),
-                MenuItem::os_action("Cut", Cut, OsAction::Cut),
-                MenuItem::os_action("Copy", Copy, OsAction::Copy),
-                MenuItem::os_action("Paste", Paste, OsAction::Paste),
-                MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
+                MenuItem::os_action(t("Cut"), Cut, OsAction::Cut),
+                MenuItem::os_action(t("Copy"), Copy, OsAction::Copy),
+                MenuItem::os_action(t("Paste"), Paste, OsAction::Paste),
+                MenuItem::os_action(t("Select All"), SelectAll, OsAction::SelectAll),
             ],
         },
         Menu {
-            name: "View".into(),
+            name: t("View").into(),
             items: vec![
-                MenuItem::action("Focus Search", FocusSearch),
+                MenuItem::action(t("Focus Search"), FocusSearch),
                 MenuItem::separator(),
-                MenuItem::action("Toggle Artifact Tree", ToggleSidebar),
-                MenuItem::action("Toggle Inspector", ToggleInspector),
+                MenuItem::action(t("Toggle Artifact Tree"), ToggleSidebar),
+                MenuItem::action(t("Toggle Inspector"), ToggleInspector),
                 MenuItem::separator(),
-                MenuItem::action("Standard Layout", LayoutStandard),
-                MenuItem::action("Focus Layout", LayoutFocus),
-                MenuItem::action("Analysis Layout", LayoutAnalysis),
+                MenuItem::action(t("Standard Layout"), LayoutStandard),
+                MenuItem::action(t("Focus Layout"), LayoutFocus),
+                MenuItem::action(t("Analysis Layout"), LayoutAnalysis),
                 MenuItem::separator(),
-                MenuItem::action("Toggle High Contrast", ToggleHighContrast),
+                MenuItem::action(t("Toggle High Contrast"), ToggleHighContrast),
             ],
         },
         Menu {
-            name: "Help".into(),
-            items: vec![MenuItem::action("Discord", OpenDiscord)],
+            name: t("Language").into(),
+            items: i18n::LANGUAGES
+                .iter()
+                .map(|(code, name)| {
+                    MenuItem::action(
+                        format!(
+                            "{}{}",
+                            if *code == i18n::language() {
+                                "✓ "
+                            } else {
+                                ""
+                            },
+                            name
+                        ),
+                        SetLanguage {
+                            code: (*code).to_owned(),
+                        },
+                    )
+                })
+                .collect(),
         },
         Menu {
-            name: "Window".into(),
+            name: t("Help").into(),
+            items: vec![MenuItem::action(t("Discord"), OpenDiscord)],
+        },
+        Menu {
+            name: t("Window").into(),
             items: vec![],
         },
     ]);
@@ -6681,12 +6727,63 @@ fn new_window(_: &NewWindow, cx: &mut App) {
     open_hexlora_window(cx);
 }
 
+#[derive(Clone, PartialEq, Action)]
+#[action(namespace = hexlora, no_json)]
+struct SetLanguage {
+    code: String,
+}
+
+fn change_language(action: &SetLanguage, cx: &mut App) {
+    i18n::set_language(&action.code);
+    let mut preferences = load_ui_preferences();
+    preferences.language = Some(i18n::language().to_owned());
+    if let Err(error) = store_ui_preferences(&preferences) {
+        eprintln!("Could not save language preference: {error}");
+    }
+    install_menus(cx);
+    cx.defer(|cx| {
+        for handle in cx.windows() {
+            let _ = handle.update(cx, |_, window, cx| {
+                let view = cx
+                    .global::<WindowViews>()
+                    .0
+                    .get(&window.window_handle().window_id())
+                    .and_then(WeakEntity::upgrade);
+                if let Some(view) = view {
+                    view.update(cx, |this, cx| {
+                        this.search_input.update(cx, |input, cx| {
+                            input.set_placeholder(
+                                t("Search artifact, symbols, strings, or enter hex bytes…"),
+                                window,
+                                cx,
+                            )
+                        });
+                        this.note_input.update(cx, |input, cx| {
+                            input.set_placeholder(
+                                t("Add or replace note for selected node…"),
+                                window,
+                                cx,
+                            )
+                        });
+                        cx.notify();
+                    });
+                }
+            });
+        }
+    });
+}
+
 fn main() {
+    let preferred = load_ui_preferences()
+        .language
+        .unwrap_or_else(i18n::system_language);
+    i18n::set_language(&preferred);
     Application::new().run(|cx| {
         gpui_component::init(cx);
         configure_component_theme(cx);
         cx.set_global(WindowViews::default());
         cx.activate(true);
+        cx.on_action(change_language);
         cx.on_action(quit);
         cx.on_action(new_window);
         cx.on_action(open_file_from_menu);

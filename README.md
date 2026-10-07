@@ -11,6 +11,16 @@ Hexlora is a cross-platform, static application and binary inspection workbench 
 
 English is the canonical README. Localized editions cover installation, major capabilities, safety boundaries, and documentation links; consult this edition for the most detailed and current support matrix.
 
+## Interface languages
+
+Hexlora supports English, Simplified Chinese, Japanese, Korean, German, French,
+Spanish, Italian, Brazilian Portuguese, Russian, and Vietnamese. Choose **Language**
+in the menu bar or the window footer; changes apply immediately to all open windows
+and are saved for the next launch. The first launch follows the system locale;
+`HEXLORA_LANGUAGE` can supply a locale for testing. Interface navigation, buttons,
+panel titles, and common table headings are localized. Artifact contents, technical
+parser diagnostics, and exported report/schema data retain their original text.
+
 ## Screenshots
 
 [![Hexlora inspecting Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)

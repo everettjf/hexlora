@@ -3,6 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array><string>en</string><string>zh-CN</string><string>ja</string><string>ko</string><string>de</string><string>fr</string><string>es</string><string>it</string><string>pt-BR</string><string>ru</string><string>vi</string></array>
   <key>CFBundleExecutable</key><string>Hexlora</string>
   <key>CFBundleIdentifier</key><string>com.hexlora.app</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
@@ -11,8 +13,8 @@
   <key>CFBundleIconFile</key><string>Hexlora.icns</string>
   <key>CFBundleIconName</key><string>Hexlora</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.1.19</string>
-  <key>CFBundleVersion</key><string>1.1.19</string>
+  <key>CFBundleShortVersionString</key><string>1.1.21</string>
+  <key>CFBundleVersion</key><string>1.1.21</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
