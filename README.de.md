@@ -19,9 +19,9 @@ Hexlora unterstützt Englisch, vereinfachtes Chinesisch, Japanisch, Koreanisch, 
 
 ## Screenshots
 
-[![Hexlora untersucht Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/de/#gallery)
+[![Hexlora untersucht Hexlora.app](docs/assets/screenshots/overview.jpg)](https://atomsprout.com/hexlora/de/#gallery)
 
-Die [Live-Galerie](https://xnu.app/hexlora/de/#gallery) wechselt zwischen Anwendungsstruktur, Mach-O-Details, Abhängigkeiten, extrahierten Strings und begrenzter Hex-Ansicht.
+Die [Live-Galerie](https://atomsprout.com/hexlora/de/#gallery) wechselt zwischen Anwendungsstruktur, Mach-O-Details, Abhängigkeiten, extrahierten Strings und begrenzter Hex-Ansicht.
 
 ## Installation mit Homebrew
 
@@ -89,6 +89,6 @@ Neben dem vollständigen Rust-Workspace, Clippy, Rust 1.88 als MSRV, CLI-/Report
 
 ## Dokumentation
 
-[Produktstrategie](docs/product-strategy.md) · [Produkt- und Wettbewerbsanalyse](docs/product-analysis-roadmap.md) · [IPAView-Plan](docs/ipa-convergence-plan.md) · [Testmatrix](docs/testing.md) · [Website](https://xnu.app/hexlora/de/)
+[Produktstrategie](docs/product-strategy.md) · [Produkt- und Wettbewerbsanalyse](docs/product-analysis-roadmap.md) · [IPAView-Plan](docs/ipa-convergence-plan.md) · [Testmatrix](docs/testing.md) · [Website](https://atomsprout.com/hexlora/de/)
 
 Die englische README ist maßgeblich; Übersetzungen werden bei Änderungen an Version, Installation oder Hauptfunktionen synchronisiert.

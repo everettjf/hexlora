@@ -19,9 +19,9 @@ Hexlora は Rust で実装された、クロスプラットフォームのソフ
 
 ## スクリーンショット
 
-[![Hexlora.app を検査する Hexlora](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/ja/#gallery)
+[![Hexlora.app を検査する Hexlora](docs/assets/screenshots/overview.jpg)](https://atomsprout.com/hexlora/ja/#gallery)
 
-[ライブギャラリー](https://xnu.app/hexlora/ja/#gallery)では、アプリ構造、Mach-O、依存関係、抽出文字列、範囲限定 Hex ビューを切り替えて確認できます。
+[ライブギャラリー](https://atomsprout.com/hexlora/ja/#gallery)では、アプリ構造、Mach-O、依存関係、抽出文字列、範囲限定 Hex ビューを切り替えて確認できます。
 
 ## Homebrew でインストール
 
@@ -89,6 +89,6 @@ Rust workspace 全体、Clippy、Rust 1.88 の MSRV、CLI/レポート契約、m
 
 ## ドキュメント
 
-[製品戦略](docs/product-strategy.md) · [現状・競合分析](docs/product-analysis-roadmap.md) · [IPAView 統合計画](docs/ipa-convergence-plan.md) · [テストマトリクス](docs/testing.md) · [Web サイト](https://xnu.app/hexlora/ja/)
+[製品戦略](docs/product-strategy.md) · [現状・競合分析](docs/product-analysis-roadmap.md) · [IPAView 統合計画](docs/ipa-convergence-plan.md) · [テストマトリクス](docs/testing.md) · [Web サイト](https://atomsprout.com/hexlora/ja/)
 
 英語 README が正規版です。バージョン、インストール方法、主要機能の変更時には翻訳版も同期します。

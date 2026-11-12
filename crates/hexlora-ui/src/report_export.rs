@@ -82,7 +82,7 @@ pub fn render_markdown(document: &ReportDocument) -> String {
             }
         }
     }
-    output.push_str("\n---\n\n*Powered by [Hexlora](https://xnu.app/hexlora/)*\n");
+    output.push_str("\n---\n\n*Powered by [Hexlora](https://atomsprout.com/hexlora/)*\n");
     output
 }
 

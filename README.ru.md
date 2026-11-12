@@ -16,7 +16,7 @@ Hexlora поддерживает английский, упрощённый ки
 
 ## Снимки экрана
 
-[![Hexlora исследует Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/ru/#gallery)
+[![Hexlora исследует Hexlora.app](docs/assets/screenshots/overview.jpg)](https://atomsprout.com/hexlora/ru/#gallery)
 
 Галерея показывает структуру приложений, сведения Mach-O, зависимости, извлечённые строки и просмотр байтов с ограниченным объёмом чтения.
 
@@ -82,4 +82,4 @@ CI проверяет рабочую область Rust, Clippy, минимал
 
 ## Документация
 
-[Стратегия продукта](docs/product-strategy.md) · [Подробная матрица поддержки (английский)](README.md#detailed-support-matrix) · [Схема отчётов (английский)](docs/report-schema.md) · [Матрица тестов (английский)](docs/testing.md) · [Сайт](https://xnu.app/hexlora/ru/)
+[Стратегия продукта](docs/product-strategy.md) · [Подробная матрица поддержки (английский)](README.md#detailed-support-matrix) · [Схема отчётов (английский)](docs/report-schema.md) · [Матрица тестов (английский)](docs/testing.md) · [Сайт](https://atomsprout.com/hexlora/ru/)

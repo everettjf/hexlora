@@ -16,7 +16,7 @@ Hexlora supporta inglese, cinese semplificato, giapponese, coreano, tedesco, fra
 
 ## Schermate
 
-[![Hexlora durante l’ispezione di Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/it/#gallery)
+[![Hexlora durante l’ispezione di Hexlora.app](docs/assets/screenshots/overview.jpg)](https://atomsprout.com/hexlora/it/#gallery)
 
 La galleria mostra struttura delle app, dettagli Mach-O, dipendenze, stringhe estratte e lettura esadecimale a intervalli limitati.
 
@@ -82,4 +82,4 @@ La CI verifica il workspace Rust, Clippy, Rust 1.88 come versione minima, i cont
 
 ## Documentazione
 
-[Strategia del prodotto](docs/product-strategy.md) · [Matrice dettagliata del supporto (inglese)](README.md#detailed-support-matrix) · [Schema dei rapporti (inglese)](docs/report-schema.md) · [Matrice dei test (inglese)](docs/testing.md) · [Sito web](https://xnu.app/hexlora/it/)
+[Strategia del prodotto](docs/product-strategy.md) · [Matrice dettagliata del supporto (inglese)](README.md#detailed-support-matrix) · [Schema dei rapporti (inglese)](docs/report-schema.md) · [Matrice dei test (inglese)](docs/testing.md) · [Sito web](https://atomsprout.com/hexlora/it/)

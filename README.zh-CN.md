@@ -19,9 +19,9 @@ Hexlora 支持英文、简体中文、日文、韩文、德文、法文、西班
 
 ## 截图
 
-[![Hexlora 正在检查 Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/zh-CN/#gallery)
+[![Hexlora 正在检查 Hexlora.app](docs/assets/screenshots/overview.jpg)](https://atomsprout.com/hexlora/zh-CN/#gallery)
 
-[在线图库](https://xnu.app/hexlora/zh-CN/#gallery) 会动态展示应用结构、Mach-O 信息、依赖解析、字符串提取和有界 Hex 查看。
+[在线图库](https://atomsprout.com/hexlora/zh-CN/#gallery) 会动态展示应用结构、Mach-O 信息、依赖解析、字符串提取和有界 Hex 查看。
 
 ## 安装
 
@@ -102,6 +102,6 @@ Hexlora 是只读静态分析工具：不会执行导入程序、挂载镜像、
 - [现状与竞品分析](docs/product-analysis-roadmap.md)
 - [IPAView 融合计划](docs/ipa-convergence-plan.md)
 - [自动化测试矩阵](docs/testing.md)
-- [GitHub Pages](https://xnu.app/hexlora/zh-CN/)
+- [GitHub Pages](https://atomsprout.com/hexlora/zh-CN/)
 
 英文 README 是规范源；本地化页面在版本、安装方式或能力发生变化时同步更新。

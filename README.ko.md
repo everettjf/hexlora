@@ -16,7 +16,7 @@ Hexlora는 Rust로 작성된 크로스 플랫폼 앱 및 바이너리 검사 도
 
 ## 스크린샷
 
-[![Hexlora.app을 검사하는 Hexlora](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/ko/#gallery)
+[![Hexlora.app을 검사하는 Hexlora](docs/assets/screenshots/overview.jpg)](https://atomsprout.com/hexlora/ko/#gallery)
 
 갤러리에서 앱 구조, Mach-O 정보, 종속성, 추출된 문자열과 제한된 범위의 16진수 보기를 확인할 수 있습니다.
 
@@ -82,4 +82,4 @@ CI는 Rust 작업 공간, Clippy, 최소 Rust 1.88, CLI 및 보고서 규약, ma
 
 ## 문서
 
-[제품 전략](docs/product-strategy.md) · [상세 지원 목록 (영문)](README.md#detailed-support-matrix) · [보고서 스키마 (영문)](docs/report-schema.md) · [테스트 목록 (영문)](docs/testing.md) · [웹사이트](https://xnu.app/hexlora/ko/)
+[제품 전략](docs/product-strategy.md) · [상세 지원 목록 (영문)](README.md#detailed-support-matrix) · [보고서 스키마 (영문)](docs/report-schema.md) · [테스트 목록 (영문)](docs/testing.md) · [웹사이트](https://atomsprout.com/hexlora/ko/)

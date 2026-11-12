@@ -16,7 +16,7 @@ Hexlora hỗ trợ tiếng Anh, Trung giản thể, Nhật, Hàn, Đức, Pháp,
 
 ## Ảnh chụp màn hình
 
-[![Hexlora đang kiểm tra Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/vi/#gallery)
+[![Hexlora đang kiểm tra Hexlora.app](docs/assets/screenshots/overview.jpg)](https://atomsprout.com/hexlora/vi/#gallery)
 
 Thư viện ảnh giới thiệu cấu trúc ứng dụng, thông tin Mach-O, phần phụ thuộc, chuỗi đã trích xuất và trình xem Hex đọc theo phạm vi giới hạn.
 
@@ -82,4 +82,4 @@ CI kiểm tra workspace Rust, Clippy, phiên bản Rust tối thiểu 1.88, quy 
 
 ## Tài liệu
 
-[Chiến lược sản phẩm](docs/product-strategy.md) · [Ma trận hỗ trợ chi tiết (tiếng Anh)](README.md#detailed-support-matrix) · [Lược đồ báo cáo (tiếng Anh)](docs/report-schema.md) · [Ma trận kiểm thử (tiếng Anh)](docs/testing.md) · [Trang web](https://xnu.app/hexlora/vi/)
+[Chiến lược sản phẩm](docs/product-strategy.md) · [Ma trận hỗ trợ chi tiết (tiếng Anh)](README.md#detailed-support-matrix) · [Lược đồ báo cáo (tiếng Anh)](docs/report-schema.md) · [Ma trận kiểm thử (tiếng Anh)](docs/testing.md) · [Trang web](https://atomsprout.com/hexlora/vi/)

@@ -23,9 +23,9 @@ parser diagnostics, and exported report/schema data retain their original text.
 
 ## Screenshots
 
-[![Hexlora inspecting Hexlora.app](docs/assets/screenshots/overview.jpg)](https://xnu.app/hexlora/#gallery)
+[![Hexlora inspecting Hexlora.app](docs/assets/screenshots/overview.jpg)](https://atomsprout.com/hexlora/#gallery)
 
-The live [Hexlora gallery](https://xnu.app/hexlora/#gallery) rotates through application structure, Mach-O details, dependency resolution, extracted strings, and bounded hex inspection. The screenshots were captured from Hexlora while statically inspecting `/Applications/Hexlora.app`.
+The live [Hexlora gallery](https://atomsprout.com/hexlora/#gallery) rotates through application structure, Mach-O details, dependency resolution, extracted strings, and bounded hex inspection. The screenshots were captured from Hexlora while statically inspecting `/Applications/Hexlora.app`.
 
 ## Install with Homebrew
 
@@ -61,7 +61,7 @@ Native Windows x64 and Linux amd64 packages are built by GitHub Actions. A tagge
 
 To produce the packages without publishing a release, run the **Package Windows and Linux** workflow manually. Creating a `v*` tag also uploads the verified artifacts to GitHub Releases.
 
-The UI ships with a warm terminal-style dark theme derived from the semantic palette used by [xnu.app](https://xnu.app): warm near-black surfaces, paper-colored text, terminal green primary actions, and amber accents. Theme colors live in one semantic token module instead of individual views.
+The UI ships with a warm terminal-style dark theme derived from the semantic palette used by [xnu.app](https://atomsprout.com): warm near-black surfaces, paper-colored text, terminal green primary actions, and amber accents. Theme colors live in one semantic token module instead of individual views.
 
 ## Build and run on macOS
 
