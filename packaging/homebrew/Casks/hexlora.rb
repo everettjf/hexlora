@@ -1,11 +1,11 @@
 cask "hexlora" do
-  version "1.1.21"
-  sha256 "1bb311135424dd0aa4c1e7f58afba0664f5b38c3722a1e427df689c291190aea"
+  version "1.1.22"
+  sha256 "bde9111ab11e781397c99eab6d955c0e34e648cb36b43984c50536fd711b3a03"
 
   url "https://github.com/everettjf/homebrew-tap/releases/download/hexlora-v#{version}/Hexlora-#{version}-macos.zip"
   name "Hexlora"
   desc "Application, package, and binary inspection workbench"
-  homepage "https://github.com/everettjf/hexlora"
+  homepage "https://atomsprout.com/hexlora/"
 
   depends_on macos: :ventura
   depends_on arch: :arm64
