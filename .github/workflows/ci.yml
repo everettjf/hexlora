@@ -41,7 +41,8 @@ jobs:
         run: scripts/test-macos-app.sh
 
   release-script-contract:
-    runs-on: macos-15
+    # Syntax and required-command checks are portable; reserve Mac runners for builds.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
