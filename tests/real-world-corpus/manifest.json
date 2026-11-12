@@ -126,13 +126,13 @@
     },
     {
       "id": "hexlora-valid-signed-app",
-      "file": "Hexlora-1.1.7-macos.zip",
+      "file": "Hexlora-1.1.21-macos.zip",
       "type": "macos_app_valid_signature",
-      "source": "https://github.com/everettjf/homebrew-tap",
+      "source": "https://github.com/everettjf/hexlora",
       "license": "Apache-2.0",
-      "url": "https://github.com/everettjf/homebrew-tap/releases/download/hexlora-v1.1.7/Hexlora-1.1.7-macos.zip",
-      "bytes": 8960877,
-      "sha256": "ae7f5ccc9ef7753738b665dc986a900b43e720eb44a473405946ff7d673bf893",
+      "url": "https://github.com/everettjf/hexlora/releases/download/v1.1.21/Hexlora-1.1.21-macos.zip",
+      "bytes": 9249489,
+      "sha256": "1bb311135424dd0aa4c1e7f58afba0664f5b38c3722a1e427df689c291190aea",
       "depth": "deep",
       "prepare": {
         "kind": "zip",
