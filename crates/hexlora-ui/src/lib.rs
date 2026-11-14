@@ -3,5 +3,3 @@
 pub mod file_search;
 pub mod report_export;
 pub mod string_filter;
-
-pub mod i18n;

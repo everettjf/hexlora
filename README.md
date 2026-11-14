@@ -2,24 +2,14 @@
 
 [Discord](https://discord.gg/eGzEaP6TzR)
 
-**English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Italiano](README.it.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [Tiếng Việt](README.vi.md)
-
 [![macOS](https://img.shields.io/badge/macOS-13%2B-d69b51?style=flat-square)](#requirements)
 [![License](https://img.shields.io/badge/license-Apache--2.0-d7d3c6?style=flat-square)](LICENSE)
 
 Hexlora is a cross-platform, static application and binary inspection workbench written in Rust. It treats applications, directories, packages, and individual files as logical Artifacts, then presents their structure and PE, Mach-O, or ELF details through one host-independent analysis model.
 
-English is the canonical README. Localized editions cover installation, major capabilities, safety boundaries, and documentation links; consult this edition for the most detailed and current support matrix.
+## Interface language
 
-## Interface languages
-
-Hexlora supports English, Simplified Chinese, Japanese, Korean, German, French,
-Spanish, Italian, Brazilian Portuguese, Russian, and Vietnamese. Choose **Language**
-in the menu bar or the window footer; changes apply immediately to all open windows
-and are saved for the next launch. The first launch follows the system locale;
-`HEXLORA_LANGUAGE` can supply a locale for testing. Interface navigation, buttons,
-panel titles, and common table headings are localized. Artifact contents, technical
-parser diagnostics, and exported report/schema data retain their original text.
+The Hexlora desktop interface is English-only.
 
 ## Screenshots
 
@@ -61,7 +51,7 @@ Native Windows x64 and Linux amd64 packages are built by GitHub Actions. A tagge
 
 To produce the packages without publishing a release, run the **Package Windows and Linux** workflow manually. Creating a `v*` tag also uploads the verified artifacts to GitHub Releases.
 
-The UI ships with a warm terminal-style dark theme derived from the semantic palette used by [AtomSprout](https://atomsprout.com): warm near-black surfaces, paper-colored text, terminal green primary actions, and amber accents. Theme colors live in one semantic token module instead of individual views.
+The UI ships with a neutral graphite dark theme: untinted gray surfaces, a single blue interactive accent, and status colors reserved for meaning (green for good, amber for caution, orange for high, red for critical). A high-contrast mode is available from the View menu.
 
 ## Build and run on macOS
 

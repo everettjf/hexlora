@@ -15,7 +15,6 @@ use gpui_component::{
     tab::{Tab, TabBar},
 };
 use hexlora::file_search::{FileSearchMode, parse_search_bytes};
-use hexlora::i18n::{self, t};
 use hexlora::report_export::{
     ReportBlock, ReportDocument, ReportSection, render_markdown as render_analysis_markdown,
     render_pdf as render_analysis_pdf,
@@ -89,9 +88,7 @@ struct DependencyVisualEdge {
     color: u32,
 }
 
-const CHART_COLORS: [u32; 8] = [
-    GREEN, ACCENT, 0x6fa7c8, 0xb58ad6, HIGH, 0x72b5a4, 0xc5ad68, 0x8b9bb4,
-];
+const CHART_COLORS: [u32; 8] = [GREEN, ACCENT, SUCCESS, PURPLE, HIGH, SKY, PINK, SLATE];
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex, OnceLock},
@@ -101,8 +98,9 @@ mod theme;
 
 use theme::{
     ACCENT, BACKGROUND as BG, BORDER, DESTRUCTIVE, DESTRUCTIVE_ACTIVE, DESTRUCTIVE_HOVER, HIGH,
-    PANEL, PANEL_RAISED as PANEL_2, PRIMARY as GREEN, PRIMARY_ACTIVE, PRIMARY_HOVER, SELECTION,
-    TEXT, TEXT_MUTED as MUTED, WARNING,
+    ON_PRIMARY, PANEL, PANEL_RAISED as PANEL_2, PINK, PRIMARY as GREEN, PRIMARY_SOLID,
+    PRIMARY_SOLID_ACTIVE, PRIMARY_SOLID_HOVER, PURPLE, SELECTION, SKY, SLATE, SUCCESS, TEXT,
+    TEXT_MUTED as MUTED, WARNING,
 };
 
 actions!(
@@ -152,7 +150,6 @@ impl Global for WindowViews {}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 struct UiPreferences {
-    language: Option<String>,
     show_sidebar: bool,
     show_inspector: bool,
     high_contrast: bool,
@@ -163,7 +160,6 @@ struct UiPreferences {
 impl Default for UiPreferences {
     fn default() -> Self {
         Self {
-            language: None,
             show_sidebar: true,
             show_inspector: true,
             high_contrast: false,
@@ -377,10 +373,10 @@ impl HexloraApp {
         focus_handle.focus(window);
         let search_input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder(t("Search artifact, symbols, strings, or enter hex bytes…"))
+                .placeholder("Search artifact, symbols, strings, or enter hex bytes…")
         });
         let note_input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder(t("Add or replace note for selected node…"))
+            InputState::new(window, cx).placeholder("Add or replace note for selected node…")
         });
         let search_subscription = cx.subscribe(&search_input, |this, input, event, cx| {
             if matches!(event, InputEvent::Change) {
@@ -488,7 +484,7 @@ impl HexloraApp {
     }
     fn choose_comparison(&mut self, folders: bool, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
-            let baseline = rfd::AsyncFileDialog::new().set_title(t("Choose baseline artifact"));
+            let baseline = rfd::AsyncFileDialog::new().set_title("Choose baseline artifact");
             let before = if folders {
                 baseline.pick_folder().await
             } else {
@@ -497,7 +493,7 @@ impl HexloraApp {
             let Some(before) = before else {
                 return anyhow::Ok(());
             };
-            let candidate = rfd::AsyncFileDialog::new().set_title(t("Choose candidate artifact"));
+            let candidate = rfd::AsyncFileDialog::new().set_title("Choose candidate artifact");
             let after = if folders {
                 candidate.pick_folder().await
             } else {
@@ -1587,6 +1583,8 @@ impl HexloraApp {
             .id("artifact-tree-panel")
             .w_full()
             .h_full()
+            .flex()
+            .flex_col()
             .bg(rgb(PANEL))
             .border_r_1()
             .border_color(rgb(BORDER))
@@ -1609,6 +1607,7 @@ impl HexloraApp {
                                 div()
                                     .id(SharedString::from(format!("node-{id}")))
                                     .h(px(28.))
+                                    .w_full()
                                     .flex()
                                     .items_center()
                                     .pl(px(12. + depth as f32 * 16.))
@@ -1620,25 +1619,31 @@ impl HexloraApp {
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.activate_tree_node(id, cx)
                                     }))
-                                    .child(div().w(px(12.)).text_color(rgb(MUTED)).child(
-                                        if expandable {
-                                            if expanded { "▾" } else { "▸" }
-                                        } else {
-                                            ""
-                                        },
-                                    ))
+                                    .child(
+                                        div().w(px(12.)).flex_none().text_color(rgb(MUTED)).child(
+                                            if expandable {
+                                                if expanded { "▾" } else { "▸" }
+                                            } else {
+                                                ""
+                                            },
+                                        ),
+                                    )
                                     .child(
                                         div()
                                             .w(px(14.))
-                                            .text_color(rgb(if active { ACCENT } else { MUTED }))
+                                            .flex_none()
+                                            .text_color(rgb(if active { GREEN } else { MUTED }))
                                             .child(kind_icon(kind)),
                                     )
                                     .child(
                                         div()
                                             .text_sm()
-                                            .text_color(rgb(if active { TEXT } else { MUTED }))
+                                            .flex_1()
+                                            .min_w_0()
                                             .overflow_hidden()
-                                            .whitespace_nowrap()
+                                            .text_ellipsis()
+                                            .line_clamp(1)
+                                            .text_color(rgb(TEXT))
                                             .child(name.clone()),
                                     )
                             })
@@ -1646,8 +1651,9 @@ impl HexloraApp {
                     }),
                 )
                 .id("tree-scroll")
+                .w_full()
                 .flex_1()
-                .h_full(),
+                .min_h_0(),
             )
     }
     fn select_path(&mut self, path: &std::path::Path, cx: &mut Context<Self>) {
@@ -1670,9 +1676,13 @@ impl HexloraApp {
                 .border_l_1()
                 .border_color(rgb(BORDER))
                 .child(section_header("DETAILS"))
-                .child(div().p_4().text_xs().text_color(rgb(MUTED)).child(t(
-                    "Select an Artifact node to inspect properties and actions.",
-                )))
+                .child(
+                    div()
+                        .p_4()
+                        .text_xs()
+                        .text_color(rgb(MUTED))
+                        .child("Select an Artifact node to inspect properties and actions."),
+                )
                 .into_any_element();
         }
         let selected_path = self
@@ -1772,7 +1782,7 @@ impl HexloraApp {
             .flex_col()
             .overflow_y_scroll()
             .child(section_header("DETAILS"))
-            .child(kv_panel("Selected Node", selected_values))
+            .child(detail_list(selected_values))
             .child(
                 div()
                     .id("node-details")
@@ -1782,10 +1792,10 @@ impl HexloraApp {
                     .gap_2()
                     .child(
                         Button::new("bookmark-selected")
-                            .label(t("Add Bookmark"))
+                            .label("Add Bookmark")
                             .on_click(cx.listener(|this, _, _, cx| this.add_bookmark(cx))),
                     )
-                    .child(div().text_xs().text_color(rgb(MUTED)).child(t("NODE NOTE")))
+                    .child(div().text_xs().text_color(rgb(MUTED)).child("NODE NOTE"))
                     .when_some(existing_note, |d, note| {
                         d.child(
                             div()
@@ -1804,12 +1814,12 @@ impl HexloraApp {
                     )
                     .child(
                         Button::new("save-node-note")
-                            .label(t("Save Note"))
+                            .label("Save Note")
                             .on_click(cx.listener(|this, _, _, cx| this.save_note(cx))),
                     )
                     .child(
                         Button::new("compute-all-hashes")
-                            .label(t("Compute hashes + entropy"))
+                            .label("Compute hashes + entropy")
                             .disabled(!self.selected_node().is_some_and(ArtifactNode::is_file))
                             .on_click(cx.listener(|this, _, _, cx| this.compute_all_hashes(cx))),
                     )
@@ -1817,7 +1827,7 @@ impl HexloraApp {
                         div()
                             .text_xs()
                             .text_color(rgb(MUTED))
-                            .child(t("SHA-1 and MD5 are provided for identification only.")),
+                            .child("SHA-1 and MD5 are provided for identification only."),
                     ),
             )
             .child(section_header("BOOKMARKS"))
@@ -1988,7 +1998,6 @@ impl HexloraApp {
     fn save_ui_preferences(&self) {
         let stored = load_ui_preferences();
         let _ = store_ui_preferences(&UiPreferences {
-            language: stored.language,
             show_sidebar: self.show_sidebar,
             show_inspector: self.show_inspector,
             high_contrast: self.high_contrast,
@@ -2386,7 +2395,7 @@ impl HexloraApp {
         let report = visual_report_svg(root, findings);
         self.prompt_path(
             rfd::AsyncFileDialog::new()
-                .set_title(t("Export Hexlora Visual Report"))
+                .set_title("Export Hexlora Visual Report")
                 .set_file_name("hexlora-visual-report.svg")
                 .add_filter("Scalable Vector Graphic", &["svg"]),
             DialogKind::Save,
@@ -2409,7 +2418,7 @@ impl HexloraApp {
     fn capture_window_screenshot(&mut self, cx: &mut Context<Self>) {
         self.prompt_path(
             rfd::AsyncFileDialog::new()
-                .set_title(t("Save Hexlora Window Screenshot"))
+                .set_title("Save Hexlora Window Screenshot")
                 .set_file_name("hexlora-window.png")
                 .add_filter("PNG image", &["png"]),
             DialogKind::Save,
@@ -2453,6 +2462,9 @@ impl HexloraApp {
         let selected_tab = tabs.iter().position(|tab| *tab == self.tab).unwrap_or(0);
         let tab_view = cx.entity();
         let tabs_for_click = tabs.clone();
+        let tabs_for_menu = tabs.clone();
+        let menu_view = cx.entity();
+        let active_tab = self.tab;
         div()
             .flex_1()
             .h_full()
@@ -2463,7 +2475,7 @@ impl HexloraApp {
             .border_2()
             .border_color(rgb(BG))
             .drag_over::<ExternalPaths>(|style, _, _, _| {
-                style.bg(rgba(0x58ded020)).border_color(rgb(GREEN))
+                style.bg(rgba((GREEN << 8) | 0x20)).border_color(rgb(GREEN))
             })
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 if let Some(path) = paths.paths().first() {
@@ -2474,18 +2486,47 @@ impl HexloraApp {
                 div()
                     .id("inspector-tabs-scroll")
                     .h(px(40.))
+                    .flex_none()
                     .flex()
                     .items_center()
                     .px_3()
                     .bg(rgb(PANEL))
                     .border_b_1()
                     .border_color(rgb(BORDER))
-                    .overflow_x_scrollbar()
                     .child(
+                        // The bar scrolls its own tabs; the trailing menu stays pinned at the
+                        // right edge so tabs that do not fit are always reachable.
                         TabBar::new("inspector-tabs")
+                            .w_full()
+                            .min_w_0()
                             .underline()
-                            .menu(true)
                             .small()
+                            .suffix(
+                                Button::new("all-inspector-tabs")
+                                    .label("All ▾")
+                                    .xsmall()
+                                    .compact()
+                                    .ghost()
+                                    .tooltip("Show every tab")
+                                    .dropdown_menu(move |menu, _, _| {
+                                        tabs_for_menu.iter().fold(
+                                            menu.min_w(200.).scrollable(true),
+                                            |menu, tab| {
+                                                let tab = *tab;
+                                                let view = menu_view.clone();
+                                                menu.item(
+                                                    PopupMenuItem::new(tab.label())
+                                                        .checked(tab == active_tab)
+                                                        .on_click(move |_, _, cx| {
+                                                            view.update(cx, |this, cx| {
+                                                                this.set_tab(tab, cx)
+                                                            });
+                                                        }),
+                                                )
+                                            },
+                                        )
+                                    }),
+                            )
                             .selected_index(selected_tab)
                             .children(tabs.iter().map(|tab| {
                                 let finding_count = match tab {
@@ -2515,7 +2556,7 @@ impl HexloraApp {
                                         .unwrap_or(0),
                                     _ => 0,
                                 };
-                                Tab::new().label(t(tab.label())).suffix(
+                                Tab::new().label(tab.label()).suffix(
                                     Badge::new().count(finding_count).color(rgb(DESTRUCTIVE)),
                                 )
                             }))
@@ -2528,7 +2569,11 @@ impl HexloraApp {
             )
             .child(
                 div()
-                    .id("inspector-scroll")
+                    // One scroll position per tab: switching tabs must not land mid-page.
+                    .id(SharedString::from(format!(
+                        "inspector-scroll-{}",
+                        self.tab.label()
+                    )))
                     .flex_1()
                     .min_h_0()
                     .flex()
@@ -2734,6 +2779,7 @@ impl HexloraApp {
         let hits = Arc::new(self.search_hits.clone());
         let hit_count = hits.len();
         div()
+            .flex_1()
             .flex()
             .flex_col()
             .gap_3()
@@ -2743,6 +2789,10 @@ impl HexloraApp {
             )))
             .child(
                 div()
+                    .flex_1()
+                    .min_h(px(320.))
+                    .flex()
+                    .flex_col()
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(BORDER))
@@ -2784,12 +2834,18 @@ impl HexloraApp {
                                                     .child(
                                                         div()
                                                             .text_sm()
+                                                            .overflow_hidden()
+                                                            .text_ellipsis()
+                                                            .line_clamp(1)
                                                             .text_color(rgb(TEXT))
                                                             .child(hit.value.clone()),
                                                     )
                                                     .child(
                                                         div()
                                                             .text_xs()
+                                                            .overflow_hidden()
+                                                            .text_ellipsis()
+                                                            .line_clamp(1)
                                                             .text_color(rgb(MUTED))
                                                             .child(format!(
                                                                 "{}  {}",
@@ -2802,7 +2858,8 @@ impl HexloraApp {
                                     .collect::<Vec<_>>()
                             }),
                         )
-                        .h(px(640.)),
+                        .flex_1()
+                        .min_h(px(320.)),
                     ),
             )
     }
@@ -2889,6 +2946,7 @@ impl HexloraApp {
         let row_count = indices.len();
         drop(filter);
         div()
+            .flex_1()
             .flex()
             .flex_col()
             .gap_3()
@@ -3007,7 +3065,9 @@ impl HexloraApp {
                     .bg(rgb(PANEL_2))
                     .text_xs()
                     .text_color(rgb(TEXT))
-                    .truncate()
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .line_clamp(1)
                     .cursor_pointer()
                     .hover(|style| style.bg(rgb(SELECTION)))
                     .when_some(node.id, |card, id| {
@@ -3127,7 +3187,7 @@ impl HexloraApp {
             .child(panel_title("Entropy Profile"))
             .child(div().p_4().rounded_lg().border_1().border_color(rgb(BORDER)).bg(rgb(PANEL)).h(px(260.)).child(
                 AreaChart::new(chart_data).x(|item| item.label.clone()).y(|item| item.value)
-                    .stroke(rgb(GREEN)).fill(rgba(0x58ded033))
+                    .stroke(rgb(GREEN)).fill(rgba((GREEN << 8) | 0x33))
             ))
             .child(info_panel("Block heatmap", "Each cell is a distributed 64 KiB sample. Brighter orange cells approach 8 bits/byte and can indicate compression or encryption. Click a cell to inspect its bytes."))
             .child(div().flex().flex_wrap().gap_1().children(cells))
@@ -3180,19 +3240,25 @@ impl HexloraApp {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .gap_2()
-                    .child(metric_card("1 · PARSED", "✓", "Signature envelope", GREEN))
+                    .child(metric_card(
+                        "1 · PARSED",
+                        "✓",
+                        "Signature envelope",
+                        SUCCESS,
+                    ))
                     .child(metric_card(
                         "2 · IDENTITY",
                         if identity { "✓" } else { "—" },
                         "Signer identity",
-                        if identity { GREEN } else { WARNING },
+                        if identity { SUCCESS } else { WARNING },
                     ))
                     .child(metric_card(
                         "3 · TIMESTAMP",
                         if timestamp { "✓" } else { "—" },
                         "Trusted timestamp",
-                        if timestamp { GREEN } else { WARNING },
+                        if timestamp { SUCCESS } else { WARNING },
                     ))
                     .child(metric_card(
                         "4 · TRUST",
@@ -3233,7 +3299,7 @@ impl HexloraApp {
                 label: truncate_chart_label(&item.file_type, 14),
                 value: item.delta_bytes as f64,
                 bytes: item.delta_bytes.unsigned_abs().min(u64::MAX as u128) as u64,
-                color: if item.delta_bytes > 0 { HIGH } else { GREEN },
+                color: if item.delta_bytes > 0 { HIGH } else { SUCCESS },
             })
             .collect::<Vec<_>>();
         let growth_chart = report
@@ -3389,7 +3455,7 @@ impl HexloraApp {
                         "BASELINE",
                         format_size(report.before_bytes),
                         "Previous artifact",
-                        0x6fa7c8,
+                        SKY,
                     ))
                     .child(metric_card(
                         "CANDIDATE",
@@ -3401,7 +3467,11 @@ impl HexloraApp {
                         "DELTA",
                         format_signed_size(report.delta_bytes),
                         "Net size change",
-                        if report.delta_bytes > 0 { HIGH } else { GREEN },
+                        if report.delta_bytes > 0 {
+                            HIGH
+                        } else {
+                            SUCCESS
+                        },
                     ))
                     .child(metric_card(
                         "CHANGED",
@@ -3413,7 +3483,7 @@ impl HexloraApp {
                         "RECLAIMABLE",
                         format_size(reclaimable_bytes),
                         "Duplicate bytes",
-                        0xb58ad6,
+                        PURPLE,
                     )),
             )
             .child(comparison_waterfall(report))
@@ -3552,20 +3622,20 @@ impl HexloraApp {
                         "DEX METHODS",
                         total_methods.to_string(),
                         "Across all DEX files",
-                        0x6fa7c8,
+                        SKY,
                     ))
                     .child(metric_card(
                         "NATIVE LIBS",
                         report.native_libraries.len().to_string(),
                         "Packaged ABIs",
-                        0xb58ad6,
+                        PURPLE,
                     ))
                     .child(metric_card(
                         "FINDINGS",
                         report.findings.len().to_string(),
                         "Release audit",
                         if report.findings.is_empty() {
-                            GREEN
+                            SUCCESS
                         } else {
                             HIGH
                         },
@@ -3768,7 +3838,7 @@ impl HexloraApp {
                         },
                         "Package trust",
                         if report.signature_present {
-                            GREEN
+                            SUCCESS
                         } else {
                             DESTRUCTIVE
                         },
@@ -3778,7 +3848,7 @@ impl HexloraApp {
                         report.findings.len().to_string(),
                         "Release audit",
                         if report.findings.is_empty() {
-                            GREEN
+                            SUCCESS
                         } else {
                             HIGH
                         },
@@ -3937,7 +4007,7 @@ impl HexloraApp {
                         "DEPENDENCIES",
                         report.identity.depends.len().to_string(),
                         "Package requirements",
-                        0x6fa7c8,
+                        SKY,
                     ))
                     .child(metric_card(
                         "SCRIPTS",
@@ -3950,7 +4020,7 @@ impl HexloraApp {
                         report.findings.len().to_string(),
                         "Release audit",
                         if report.findings.is_empty() {
-                            GREEN
+                            SUCCESS
                         } else {
                             HIGH
                         },
@@ -4116,7 +4186,7 @@ impl HexloraApp {
                     .text_2xl()
                     .font_semibold()
                     .text_color(rgb(TEXT))
-                    .child(t("iOS Release Audit")),
+                    .child("iOS Release Audit"),
             )
             .child(
                 div()
@@ -4139,7 +4209,7 @@ impl HexloraApp {
                         "TARGETS",
                         report.targets.len().to_string(),
                         "Apps & extensions",
-                        0x6fa7c8,
+                        SKY,
                     ))
                     .child(metric_card(
                         "PRIVACY",
@@ -4150,7 +4220,7 @@ impl HexloraApp {
                         },
                         "Privacy manifest",
                         if report.has_privacy_manifest {
-                            GREEN
+                            SUCCESS
                         } else {
                             WARNING
                         },
@@ -4160,7 +4230,7 @@ impl HexloraApp {
                         report.findings.len().to_string(),
                         "Release audit",
                         if report.findings.is_empty() {
-                            GREEN
+                            SUCCESS
                         } else {
                             HIGH
                         },
@@ -4195,13 +4265,19 @@ impl HexloraApp {
                             .items_center()
                             .gap_2()
                             .child(
-                                div().w(px(220.)).truncate().text_color(rgb(TEXT)).child(
-                                    target
-                                        .metadata
-                                        .bundle_identifier
-                                        .clone()
-                                        .unwrap_or_else(|| target.path.display().to_string()),
-                                ),
+                                div()
+                                    .w(px(220.))
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .line_clamp(1)
+                                    .text_color(rgb(TEXT))
+                                    .child(
+                                        target
+                                            .metadata
+                                            .bundle_identifier
+                                            .clone()
+                                            .unwrap_or_else(|| target.path.display().to_string()),
+                                    ),
                             )
                             .children(architectures.iter().map(|architecture| {
                                 let present = target.architectures.contains(architecture);
@@ -4210,7 +4286,7 @@ impl HexloraApp {
                                     .text_center()
                                     .rounded_sm()
                                     .bg(rgb(if present { SELECTION } else { PANEL_2 }))
-                                    .text_color(rgb(if present { GREEN } else { MUTED }))
+                                    .text_color(rgb(if present { SUCCESS } else { MUTED }))
                                     .child(if present { "✓" } else { "—" })
                             }))
                             .child(
@@ -4224,7 +4300,7 @@ impl HexloraApp {
                                         PANEL_2
                                     }))
                                     .text_color(rgb(if target.has_privacy_manifest {
-                                        GREEN
+                                        SUCCESS
                                     } else {
                                         WARNING
                                     }))
@@ -4237,6 +4313,7 @@ impl HexloraApp {
                     })
                     .collect::<Vec<_>>();
                 div()
+                    .id("ipa-architecture-matrix")
                     .p_4()
                     .rounded_lg()
                     .border_1()
@@ -4245,6 +4322,7 @@ impl HexloraApp {
                     .flex()
                     .flex_col()
                     .gap_2()
+                    .overflow_x_scroll()
                     .child(
                         div()
                             .flex()
@@ -4252,11 +4330,11 @@ impl HexloraApp {
                             .text_xs()
                             .font_semibold()
                             .text_color(rgb(MUTED))
-                            .child(div().w(px(220.)).child(t("TARGET")))
+                            .child(div().w(px(220.)).child("TARGET"))
                             .children(architectures.into_iter().map(|architecture| {
                                 div().w(px(88.)).text_center().child(architecture)
                             }))
-                            .child(div().w(px(88.)).text_center().child(t("PRIVACY"))),
+                            .child(div().w(px(88.)).text_center().child("PRIVACY")),
                     )
                     .children(rows)
             });
@@ -4396,18 +4474,18 @@ impl HexloraApp {
                 div()
                     .flex()
                     .gap_2()
-                    .child(metric_card("1 · PROFILE", "✓", "Decoded", GREEN))
+                    .child(metric_card("1 · PROFILE", "✓", "Decoded", SUCCESS))
                     .child(metric_card(
                         "2 · TEAM",
                         if has_team { "✓" } else { "—" },
                         "Identity",
-                        if has_team { GREEN } else { WARNING },
+                        if has_team { SUCCESS } else { WARNING },
                     ))
                     .child(metric_card(
                         "3 · APP ID",
                         if has_app { "✓" } else { "—" },
                         "Entitlement",
-                        if has_app { GREEN } else { WARNING },
+                        if has_app { SUCCESS } else { WARNING },
                     ))
                     .child(metric_card(
                         "4 · EXPIRY",
@@ -4592,7 +4670,7 @@ impl HexloraApp {
                                 .mt_1()
                                 .text_sm()
                                 .text_color(rgb(MUTED))
-                                .child(t("Explore where artifact size is concentrated.")),
+                                .child("Explore where artifact size is concentrated."),
                         ),
                     )
                     .child(
@@ -4848,13 +4926,13 @@ impl HexloraApp {
                         "BINARIES",
                         executable_count.to_string(),
                         "Executables & libraries",
-                        0x6fa7c8,
+                        SKY,
                     ))
                     .child(metric_card(
                         "DEPENDENCIES",
                         dependency_count.to_string(),
                         "Linked requirements",
-                        0xb58ad6,
+                        PURPLE,
                     ))
                     .child(metric_card(
                         "HIGH RISK",
@@ -4863,7 +4941,7 @@ impl HexloraApp {
                         if high_findings > 0 {
                             DESTRUCTIVE
                         } else {
-                            GREEN
+                            SUCCESS
                         },
                     )),
             )
@@ -5067,6 +5145,7 @@ impl HexloraApp {
                 .collect::<String>();
             div()
                 .flex()
+                .min_w(px(660.))
                 .font_family("Menlo")
                 .text_sm()
                 .child(
@@ -5093,14 +5172,29 @@ impl HexloraApp {
                             .child(format!("{byte:02x}"))
                     },
                 )))
-                .child(div().text_color(rgb(GREEN)).child(ascii))
+                .child(
+                    div()
+                        .whitespace_nowrap()
+                        .text_color(rgb(MUTED))
+                        .child(ascii),
+                )
         });
         div()
             .flex()
             .flex_col()
             .gap_3()
             .child(panel_title(format!("Hex · 0x{offset:x} · 4 KiB chunk")))
-            .child(div().p_4().rounded_md().bg(rgb(PANEL)).children(rows))
+            .child(
+                div()
+                    .id("hex-rows")
+                    .p_4()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(BORDER))
+                    .bg(rgb(PANEL))
+                    .overflow_x_scroll()
+                    .children(rows),
+            )
             .into_any_element()
     }
 }
@@ -5141,8 +5235,10 @@ impl Render for HexloraApp {
             .child(
                 div()
                     .h(px(36.))
+                    .flex_none()
                     .flex()
                     .flex_col()
+                    .overflow_hidden()
                     .bg(rgb(PANEL))
                     .border_b_1()
                     .border_color(rgb(BORDER))
@@ -5160,28 +5256,28 @@ impl Render for HexloraApp {
                                 div()
                                     .h(px(26.))
                                     .flex_1()
-                                    .min_w(px(240.))
+                                    .min_w(px(140.))
                                     .child(Input::new(&self.search_input).xsmall()),
                             )
                             .child(
                                 Button::new("search-all")
-                                    .label(t("Search Artifact"))
+                                    .label("Search Artifact")
                                     .primary()
                                     .xsmall()
                                     .compact()
-                                    .tooltip(t("Search the entire artifact (Return)"))
+                                    .tooltip("Search the entire artifact (Return)")
                                     .on_click(cx.listener(|this, _, _, cx| this.search_all(cx))),
                             )
                             .child(
                                 Button::new("search-mode-text")
                                     .label(if self.file_search_mode == FileSearchMode::Text {
-                                        t("Text ✓")
+                                        "Text ✓"
                                     } else {
-                                        t("Text")
+                                        "Text"
                                     })
                                     .xsmall()
                                     .compact()
-                                    .tooltip(t("Interpret the query as text"))
+                                    .tooltip("Interpret the query as text")
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.file_search_mode = FileSearchMode::Text;
                                         cx.notify();
@@ -5190,13 +5286,13 @@ impl Render for HexloraApp {
                             .child(
                                 Button::new("search-mode-bytes")
                                     .label(if self.file_search_mode == FileSearchMode::Bytes {
-                                        t("Bytes ✓")
+                                        "Bytes ✓"
                                     } else {
-                                        t("Bytes")
+                                        "Bytes"
                                     })
                                     .xsmall()
                                     .compact()
-                                    .tooltip(t("Interpret the query as hexadecimal bytes"))
+                                    .tooltip("Interpret the query as hexadecimal bytes")
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.file_search_mode = FileSearchMode::Bytes;
                                         cx.notify();
@@ -5204,31 +5300,31 @@ impl Render for HexloraApp {
                             )
                             .child(
                                 Button::new("find-next")
-                                    .label(t("Find Next"))
+                                    .label("Find Next")
                                     .xsmall()
                                     .compact()
                                     .ghost()
-                                    .tooltip(t("Select the next search result"))
+                                    .tooltip("Select the next search result")
                                     .on_click(cx.listener(|this, _, _, cx| this.find_next(cx))),
                             )
                             .child(
                                 Button::new("jump-offset")
-                                    .label(t("Jump Offset"))
+                                    .label("Jump Offset")
                                     .xsmall()
                                     .compact()
                                     .ghost()
-                                    .tooltip(t("Jump to a hexadecimal file offset"))
+                                    .tooltip("Jump to a hexadecimal file offset")
                                     .on_click(
                                         cx.listener(|this, _, _, cx| this.jump_to_offset(cx)),
                                     ),
                             )
                             .child(
                                 Button::new("copy-hex")
-                                    .label(t("Copy Hex"))
+                                    .label("Copy Hex")
                                     .xsmall()
                                     .compact()
                                     .ghost()
-                                    .tooltip(t("Copy the visible hexadecimal chunk"))
+                                    .tooltip("Copy the visible hexadecimal chunk")
                                     .on_click(
                                         cx.listener(|this, _, _, cx| this.copy_hex_chunk(cx)),
                                     ),
@@ -5237,8 +5333,8 @@ impl Render for HexloraApp {
                                 DropdownButton::new("export-analysis-report")
                                     .button(
                                         Button::new("export-report-label")
-                                            .label(t("Export Report"))
-                                            .tooltip(t("Export the complete available analysis")),
+                                            .label("Export Report")
+                                            .tooltip("Export the complete available analysis"),
                                     )
                                     .primary()
                                     .xsmall()
@@ -5280,14 +5376,11 @@ impl Render for HexloraApp {
                                             .child(Progress::new().value(62.).bg(rgb(GREEN))),
                                     )
                                     .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(ACCENT))
-                                            .child(t("Analyzing…")),
+                                        div().text_xs().text_color(rgb(ACCENT)).child("Analyzing…"),
                                     )
                                     .child(
                                         Button::new("cancel-task")
-                                            .label(t("Cancel"))
+                                            .label("Cancel")
                                             .xsmall()
                                             .compact()
                                             .on_click(cx.listener(|this, _, _, cx| {
@@ -5298,43 +5391,47 @@ impl Render for HexloraApp {
                     ),
             )
             .child(
-                h_resizable("workspace-panels")
-                    .on_resize(|state, _, cx| {
-                        let sizes = state.read(cx).sizes();
-                        if sizes.len() == 3 {
-                            let mut preferences = load_ui_preferences();
-                            preferences.sidebar_width = sizes[0].as_f32().clamp(180., 520.);
-                            preferences.inspector_width = sizes[2].as_f32().clamp(240., 560.);
-                            let _ = store_ui_preferences(&preferences);
-                        }
-                    })
-                    .child(
-                        resizable_panel()
-                            .visible(self.show_sidebar)
-                            .size(px(self.sidebar_width))
-                            .size_range(px(180.)..px(520.))
-                            .child(self.render_sidebar(cx)),
-                    )
-                    .child(
-                        resizable_panel()
-                            .size_range(px(420.)..Pixels::MAX)
-                            .child(self.render_main(cx)),
-                    )
-                    .child(
-                        resizable_panel()
-                            .visible(self.show_inspector)
-                            .size(px(self.inspector_width))
-                            .size_range(px(240.)..px(560.))
-                            .child(self.render_details(cx)),
-                    ),
+                div().flex_1().min_h_0().w_full().overflow_hidden().child(
+                    h_resizable("workspace-panels")
+                        .on_resize(|state, _, cx| {
+                            let sizes = state.read(cx).sizes();
+                            if sizes.len() == 3 {
+                                let mut preferences = load_ui_preferences();
+                                preferences.sidebar_width = sizes[0].as_f32().clamp(180., 520.);
+                                preferences.inspector_width = sizes[2].as_f32().clamp(240., 560.);
+                                let _ = store_ui_preferences(&preferences);
+                            }
+                        })
+                        .child(
+                            resizable_panel()
+                                .visible(self.show_sidebar)
+                                .size(px(self.sidebar_width))
+                                .size_range(px(180.)..px(520.))
+                                .child(self.render_sidebar(cx)),
+                        )
+                        .child(
+                            resizable_panel()
+                                .size_range(px(420.)..Pixels::MAX)
+                                .child(self.render_main(cx)),
+                        )
+                        .child(
+                            resizable_panel()
+                                .visible(self.show_inspector)
+                                .size(px(self.inspector_width))
+                                .size_range(px(240.)..px(560.))
+                                .child(self.render_details(cx)),
+                        ),
+                ),
             )
             .child(
                 div()
                     .h(px(28.))
+                    .flex_none()
                     .flex()
                     .items_center()
                     .px_3()
                     .gap_3()
+                    .overflow_hidden()
                     .bg(rgb(PANEL_2))
                     .border_t_1()
                     .border_color(rgb(BORDER))
@@ -5349,28 +5446,25 @@ impl Render for HexloraApp {
                             .on_click(|_, _, cx| cx.open_url("https://discord.gg/eGzEaP6TzR")),
                     )
                     .child(
-                        Button::new("language-picker")
-                            .label(t("Language"))
-                            .xsmall()
-                            .compact()
-                            .ghost()
-                            .dropdown_menu(|menu, _, _| {
-                                i18n::LANGUAGES.iter().fold(menu, |menu, (code, name)| {
-                                    let code = (*code).to_owned();
-                                    menu.item(PopupMenuItem::new(*name).on_click(
-                                        move |_, _, cx| {
-                                            change_language(
-                                                &SetLanguage { code: code.clone() },
-                                                cx,
-                                            );
-                                        },
-                                    ))
-                                })
-                            }),
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .line_clamp(1)
+                            .child(self.status.clone()),
                     )
-                    .child(t(&self.status))
                     .when_some(self.error.clone(), |d, e| {
-                        d.child(div().text_color(rgb(DESTRUCTIVE)).child(e))
+                        d.child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .line_clamp(1)
+                                .text_color(rgb(DESTRUCTIVE))
+                                .child(e),
+                        )
                     }),
             )
     }
@@ -5438,9 +5532,9 @@ fn kind_icon(kind: ArtifactKind) -> &'static str {
     }
 }
 fn section_header(text: &'static str) -> impl IntoElement {
-    let text = t(text);
     div()
         .h(px(38.))
+        .flex_none()
         .flex()
         .items_center()
         .px_3()
@@ -5451,7 +5545,6 @@ fn section_header(text: &'static str) -> impl IntoElement {
 }
 fn panel_title(text: impl Into<SharedString>) -> impl IntoElement {
     let text: SharedString = text.into();
-    let text = t(text.as_ref());
     div()
         .text_lg()
         .font_semibold()
@@ -5473,6 +5566,7 @@ fn kv_panel(title: &'static str, values: Vec<(String, String)>) -> impl IntoElem
                 .children(values.into_iter().map(|(k, v)| {
                     div()
                         .min_h(px(38.))
+                        .py_1p5()
                         .flex()
                         .items_center()
                         .border_b_1()
@@ -5480,14 +5574,16 @@ fn kv_panel(title: &'static str, values: Vec<(String, String)>) -> impl IntoElem
                         .child(
                             div()
                                 .w(px(210.))
+                                .flex_none()
                                 .px_3()
                                 .text_sm()
                                 .text_color(rgb(MUTED))
-                                .child(t(k)),
+                                .child(k),
                         )
                         .child(
                             div()
                                 .flex_1()
+                                .min_w_0()
                                 .px_3()
                                 .text_sm()
                                 .text_color(rgb(TEXT))
@@ -5519,15 +5615,75 @@ fn lazy_table_panel(
     cx: &mut Context<HexloraApp>,
 ) -> AnyElement {
     const MAX_RENDERED_ROWS: usize = 20_000;
+    const ROW_HEIGHT: f32 = 32.;
+    const HEADER_HEIGHT: f32 = 34.;
+    // A table always shows at least this many rows (or all of them when it has fewer), even
+    // when several tables share one scrolling page; a table that is alone on a page grows to
+    // fill the remaining height.
+    const MIN_VISIBLE_ROWS: usize = 12;
     let truncated = total > MAX_RENDERED_ROWS;
     let visible_count = total.min(MAX_RENDERED_ROWS);
+    let list_min_height = visible_count.clamp(1, MIN_VISIBLE_ROWS) as f32 * ROW_HEIGHT;
+
+    // Size columns from their content so long paths and names get the room instead of every
+    // column being the same width.
+    let mut weights = headers
+        .iter()
+        .map(|header| header.chars().count() as f32 + 2.)
+        .collect::<Vec<_>>();
+    for index in 0..visible_count.min(64) {
+        for (weight, value) in weights.iter_mut().zip(row_at(index)) {
+            *weight = weight.max(value.chars().count() as f32);
+        }
+    }
+    let weights: Arc<[f32]> = weights
+        .into_iter()
+        .map(|weight| weight.clamp(8., 56.))
+        .collect();
+    // Each column starts at its natural text width and shares leftover space by weight, so
+    // short columns stay readable while long ones absorb the slack. A column-direction flex
+    // box keeps the text child width-constrained, which is what lets it end in an ellipsis.
+    // Columns never shrink below 18 characters of their content (enough for a full 64-bit
+    // address); when the panel is narrower than that the table scrolls sideways instead of
+    // clipping its right-hand columns.
+    let column_width = |chars: f32| chars * 7.2 + 16.;
+    let table_min_width = weights
+        .iter()
+        .map(|weight| column_width(weight.min(18.)))
+        .sum::<f32>();
+    let cell = move |weight: f32| {
+        let mut cell = div()
+            .flex_basis(px(column_width(weight)))
+            .min_w(px(column_width(weight.min(18.))))
+            .h_full()
+            .px_2()
+            .flex()
+            .flex_col()
+            .justify_center();
+        cell.style().flex_grow = Some(weight);
+        cell.style().flex_shrink = Some(1.);
+        cell
+    };
+    let row_weights = weights.clone();
+
     div()
         .flex_1()
-        .min_h(px(160.))
         .flex()
         .flex_col()
         .gap_3()
-        .child(panel_title(title))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(panel_title(title))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(MUTED))
+                        .child(format!("{total} rows")),
+                ),
+        )
         .when(truncated, |panel| {
             panel.child(
                 div()
@@ -5540,65 +5696,109 @@ fn lazy_table_panel(
         })
         .child(
             div()
+                .id(SharedString::from(format!("table-scroll-{title}")))
                 .flex_1()
-                .min_h_0()
+                .min_h(px(HEADER_HEIGHT + list_min_height))
                 .flex()
                 .flex_col()
                 .rounded_md()
                 .border_1()
                 .border_color(rgb(BORDER))
                 .bg(rgb(PANEL))
+                .overflow_x_scroll()
                 .child(
                     div()
-                        .h(px(34.))
+                        .flex_1()
+                        .min_w(px(table_min_width))
+                        .min_h(px(HEADER_HEIGHT + list_min_height))
+                        .flex()
+                        .flex_col()
+                .child(
+                    div()
+                        .h(px(HEADER_HEIGHT))
+                        .flex_none()
                         .flex()
                         .bg(rgb(PANEL_2))
-                        .children(headers.iter().map(|h| {
-                            div()
-                                .flex_1()
-                                .px_2()
-                                .flex()
-                                .items_center()
+                        .children(headers.iter().zip(weights.iter()).map(|(header, weight)| {
+                            cell(*weight)
                                 .text_xs()
                                 .font_semibold()
                                 .text_color(rgb(MUTED))
-                                .child(t(*h))
+                                .child(div().w_full().overflow_hidden().text_ellipsis().line_clamp(1).child(*header))
                         })),
                 )
-                .child(
-                    uniform_list(
-                        SharedString::from(format!("table-{title}")),
-                        visible_count,
-                        cx.processor(move |_this, range: std::ops::Range<usize>, _, _| {
-                            range
-                                .map(|index| {
-                                    let row = row_at(index);
-                                    div()
-                                        .h(px(32.))
-                                        .flex()
-                                        .border_t_1()
-                                        .border_color(rgb(BORDER))
-                                        .children(row.into_iter().map(|value| {
-                                            div()
-                                                .flex_1()
-                                                .min_w_0()
-                                                .px_2()
-                                                .flex()
-                                                .items_center()
-                                                .text_xs()
-                                                .text_color(rgb(TEXT))
-                                                .overflow_hidden()
-                                                .child(value)
-                                        }))
-                                })
-                                .collect::<Vec<_>>()
-                        }),
+                .when(visible_count == 0, |table| {
+                    table.child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_xs()
+                            .text_color(rgb(MUTED))
+                            .child("No entries"),
                     )
-                    .flex_1()
-                    .min_h(px(96.)),
+                })
+                .when(visible_count > 0, |table| {
+                    table.child(
+                        uniform_list(
+                            SharedString::from(format!("table-{title}")),
+                            visible_count,
+                            cx.processor(move |_this, range: std::ops::Range<usize>, _, _| {
+                                range
+                                    .map(|index| {
+                                        let row = row_at(index);
+                                        div()
+                                            .h(px(ROW_HEIGHT))
+                                            .w_full()
+                                            .flex()
+                                            .border_t_1()
+                                            .border_color(rgb(BORDER))
+                                            .hover(|row| row.bg(rgb(PANEL_2)))
+                                            .children(row.into_iter().zip(row_weights.iter()).map(
+                                                |(value, weight)| {
+                                                    cell(*weight)
+                                                        .text_xs()
+                                                        .text_color(rgb(TEXT))
+                                                        .child(
+                                                            div()
+                                                                .w_full()
+                                                                .overflow_hidden().text_ellipsis().line_clamp(1)
+                                                                .child(value),
+                                                        )
+                                                },
+                                            ))
+                                    })
+                                    .collect::<Vec<_>>()
+                            }),
+                        )
+                        .w_full()
+                        .flex_1()
+                        .min_h(px(list_min_height)),
+                    )
+                }),
                 ),
         )
         .into_any_element()
+}
+
+/// Compact key/value list for the narrow details panel: the key sits above its value so long
+/// paths and identifiers wrap inside the panel instead of running off its right edge.
+fn detail_list(values: Vec<(String, String)>) -> impl IntoElement {
+    div()
+        .px_3()
+        .pb_3()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .children(values.into_iter().map(|(key, value)| {
+            div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .child(div().text_xs().text_color(rgb(MUTED)).child(key))
+                .child(div().w_full().text_sm().text_color(rgb(TEXT)).child(value))
+        }))
 }
 fn symbol_table(
     title: &'static str,
@@ -5646,7 +5846,7 @@ fn info_panel(title: &'static str, text: impl Into<SharedString>) -> impl IntoEl
                 .border_color(rgb(BORDER))
                 .text_sm()
                 .text_color(rgb(MUTED))
-                .child(t(text.into().as_ref())),
+                .child(text.into()),
         )
 }
 fn empty_state() -> impl IntoElement {
@@ -5663,11 +5863,13 @@ fn empty_state() -> impl IntoElement {
                 .text_base()
                 .font_medium()
                 .text_color(rgb(TEXT))
-                .child(t("Drop a file or folder here to inspect")),
+                .child("Drop a file or folder here to inspect"),
         )
-        .child(div().text_sm().child(t(
-            "Applications, packages, binaries, and Hexlora workspaces are supported",
-        )))
+        .child(
+            div()
+                .text_sm()
+                .child("Applications, packages, binaries, and Hexlora workspaces are supported"),
+        )
 }
 fn fmt_addr(v: u64) -> String {
     format!("0x{v:016x}")
@@ -5730,7 +5932,7 @@ fn entropy_color(value: f64) -> u32 {
     } else if value >= 5.0 {
         WARNING
     } else if value >= 2.5 {
-        GREEN
+        SUCCESS
     } else {
         ACCENT
     }
@@ -5774,7 +5976,7 @@ fn dependency_visual_layout(
             .map(|id| format!("artifact:{id}"))
             .unwrap_or_else(|| format!("requested:{}", edge.requested));
         let status_color = match edge.status {
-            hexlora_core::DependencyStatus::Bundled => GREEN,
+            hexlora_core::DependencyStatus::Bundled => SUCCESS,
             hexlora_core::DependencyStatus::System => ACCENT,
             hexlora_core::DependencyStatus::Missing => DESTRUCTIVE,
             hexlora_core::DependencyStatus::Unknown => WARNING,
@@ -5899,10 +6101,10 @@ fn artifact_top_files(root: &ArtifactNode, limit: usize) -> Vec<ChartDatum> {
     files.sort_by_key(|file| std::cmp::Reverse(file.1));
     files
         .into_iter()
-        .take(limit)
+        .take(limit.min(8))
         .enumerate()
         .map(|(index, (name, bytes))| ChartDatum {
-            label: truncate_chart_label(&name, 16),
+            label: truncate_chart_label(&name, 10),
             value: bytes as f64,
             bytes,
             color: CHART_COLORS[index % CHART_COLORS.len()],
@@ -5940,11 +6142,9 @@ fn artifact_treemap(root: &ArtifactNode, limit: usize) -> Vec<TreemapItem> {
 fn artifact_kind_color(kind: ArtifactKind, index: usize) -> u32 {
     match kind {
         ArtifactKind::Executable => GREEN,
-        ArtifactKind::DynamicLibrary | ArtifactKind::StaticLibrary | ArtifactKind::Framework => {
-            0x6fa7c8
-        }
+        ArtifactKind::DynamicLibrary | ArtifactKind::StaticLibrary | ArtifactKind::Framework => SKY,
         ArtifactKind::Resource => ACCENT,
-        ArtifactKind::Metadata => 0xb58ad6,
+        ArtifactKind::Metadata => PURPLE,
         ArtifactKind::Archive | ArtifactKind::Package => HIGH,
         _ => CHART_COLORS[index % CHART_COLORS.len()],
     }
@@ -6024,9 +6224,9 @@ fn comparison_treemap(report: &CompareReportV1, limit: usize) -> Vec<TreemapItem
             delta: Some(change.delta_bytes),
             color: match change.kind {
                 ChangeKind::Added => HIGH,
-                ChangeKind::Removed => GREEN,
+                ChangeKind::Removed => SUCCESS,
                 ChangeKind::Modified if change.delta_bytes > 0 => WARNING,
-                ChangeKind::Modified => 0x6fa7c8,
+                ChangeKind::Modified => SKY,
             },
             x: 0.,
             y: 0.,
@@ -6068,7 +6268,7 @@ fn comparison_waterfall(report: &CompareReportV1) -> impl IntoElement {
                 .child(waterfall_step(
                     "Baseline",
                     format_size(report.before_bytes),
-                    0x6fa7c8,
+                    SKY,
                 ))
                 .child(waterfall_arrow())
                 .child(waterfall_step("Growth", format_signed_size(added), HIGH))
@@ -6153,7 +6353,7 @@ fn truncate_chart_label(value: &str, max_chars: usize) -> String {
 fn donut_chart_card(title: &'static str, data: Vec<ChartDatum>) -> impl IntoElement {
     let chart_data = data.clone();
     div()
-        .min_w(px(360.))
+        .min_w(px(320.))
         .flex_1()
         .p_4()
         .rounded_lg()
@@ -6168,42 +6368,48 @@ fn donut_chart_card(title: &'static str, data: Vec<ChartDatum>) -> impl IntoElem
                 .items_center()
                 .gap_4()
                 .child(
-                    div().w(px(210.)).h(px(190.)).child(
+                    div().w(px(190.)).h(px(190.)).flex_none().child(
                         PieChart::new(chart_data)
                             .value(|datum| datum.value as f32)
-                            .inner_radius(58.)
+                            .inner_radius(56.)
+                            .outer_radius(84.)
                             .pad_angle(0.018)
                             .color(|datum| rgb(datum.color)),
                     ),
                 )
-                .child(
-                    div()
-                        .flex_1()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .children(data.into_iter().map(|datum| {
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .child(div().size(px(8.)).rounded_full().bg(rgb(datum.color)))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .text_xs()
-                                        .text_color(rgb(MUTED))
-                                        .child(datum.label),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_semibold()
-                                        .text_color(rgb(TEXT))
-                                        .child(format_size(datum.bytes)),
-                                )
-                        })),
-                ),
+                .child(div().flex_1().min_w_0().flex().flex_col().gap_2().children(
+                    data.into_iter().map(|datum| {
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .size(px(8.))
+                                    .flex_none()
+                                    .rounded_full()
+                                    .bg(rgb(datum.color)),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .line_clamp(1)
+                                    .text_xs()
+                                    .text_color(rgb(MUTED))
+                                    .child(datum.label),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_semibold()
+                                    .text_color(rgb(TEXT))
+                                    .child(format_size(datum.bytes)),
+                            )
+                    }),
+                )),
         )
 }
 
@@ -6212,8 +6418,10 @@ fn bar_chart_card(
     data: Vec<ChartDatum>,
     unit: &'static str,
 ) -> impl IntoElement {
+    // Skip every other axis label once the bars get narrow so labels never overlap.
+    let tick_margin = data.len().div_ceil(5).max(1);
     div()
-        .min_w(px(420.))
+        .min_w(px(320.))
         .flex_1()
         .p_4()
         .rounded_lg()
@@ -6227,6 +6435,7 @@ fn bar_chart_card(
                     .x(|datum| datum.label.clone())
                     .y(|datum| datum.value)
                     .fill(|datum| rgb(datum.color))
+                    .tick_margin(tick_margin)
                     .label(move |datum| {
                         if unit == "size" {
                             format_size(datum.bytes)
@@ -6261,10 +6470,10 @@ fn configure_component_theme_mode(high_contrast: bool, cx: &mut App) {
     theme.foreground = text;
     theme.border = border;
     theme.input = border;
-    theme.primary = primary;
-    theme.primary_hover = rgb(PRIMARY_HOVER).into();
-    theme.primary_active = rgb(PRIMARY_ACTIVE).into();
-    theme.primary_foreground = background;
+    theme.primary = rgb(PRIMARY_SOLID).into();
+    theme.primary_hover = rgb(PRIMARY_SOLID_HOVER).into();
+    theme.primary_active = rgb(PRIMARY_SOLID_ACTIVE).into();
+    theme.primary_foreground = rgb(ON_PRIMARY).into();
     theme.secondary = raised;
     theme.secondary_hover = rgb(SELECTION).into();
     theme.secondary_active = border;
@@ -6277,12 +6486,12 @@ fn configure_component_theme_mode(high_contrast: bool, cx: &mut App) {
     theme.ring = primary;
     theme.caret = primary;
     theme.link = primary;
-    theme.link_hover = rgb(PRIMARY_HOVER).into();
-    theme.link_active = rgb(PRIMARY_ACTIVE).into();
+    theme.link_hover = rgb(PRIMARY_SOLID_HOVER).into();
+    theme.link_active = rgb(PRIMARY_SOLID).into();
     theme.danger = danger;
     theme.danger_hover = rgb(DESTRUCTIVE_HOVER).into();
     theme.danger_active = rgb(DESTRUCTIVE_ACTIVE).into();
-    theme.danger_foreground = background;
+    theme.danger_foreground = rgb(ON_PRIMARY).into();
     theme.popover = panel;
     theme.popover_foreground = text;
     theme.list = panel;
@@ -6305,7 +6514,7 @@ fn configure_component_theme_mode(high_contrast: bool, cx: &mut App) {
     theme.sidebar_accent = raised;
     theme.sidebar_accent_foreground = text;
     theme.sidebar_primary = primary;
-    theme.sidebar_primary_foreground = background;
+    theme.sidebar_primary_foreground = rgb(ON_PRIMARY).into();
     theme.title_bar = background;
     theme.title_bar_border = border;
     theme.scrollbar = background;
@@ -6314,14 +6523,14 @@ fn configure_component_theme_mode(high_contrast: bool, cx: &mut App) {
     theme.radius = px(7.);
     theme.radius_lg = px(11.);
     theme.progress_bar = primary;
-    theme.success = primary;
+    theme.success = rgb(SUCCESS).into();
     theme.warning = rgb(WARNING).into();
     theme.info = rgb(ACCENT).into();
     theme.chart_1 = primary;
     theme.chart_2 = rgb(ACCENT).into();
     theme.chart_3 = rgb(HIGH).into();
-    theme.chart_4 = rgb(0x6fa7c8).into();
-    theme.chart_5 = rgb(0xb58ad6).into();
+    theme.chart_4 = rgb(SUCCESS).into();
+    theme.chart_5 = rgb(PURPLE).into();
 }
 
 fn quit(_: &Quit, cx: &mut App) {
@@ -6600,107 +6809,92 @@ fn install_menus(cx: &mut App) {
         })
         .collect::<Vec<_>>();
     let recent_menu = MenuItem::submenu(Menu {
-        name: t("Open Recent").into(),
+        name: "Open Recent".into(),
         items: recent_items,
     });
     cx.set_menus(vec![
         Menu {
             name: "Hexlora".into(),
             items: vec![
-                MenuItem::os_submenu(t("Services"), SystemMenuType::Services),
+                MenuItem::os_submenu("Services", SystemMenuType::Services),
                 MenuItem::separator(),
-                MenuItem::action(t("Quit Hexlora"), Quit),
+                MenuItem::action("Quit Hexlora", Quit),
             ],
         },
         Menu {
-            name: t("File").into(),
+            name: "File".into(),
             items: vec![
-                MenuItem::action(t("New Window"), NewWindow),
+                MenuItem::action("New Window", NewWindow),
                 MenuItem::separator(),
-                MenuItem::action(t("Open File…"), OpenFile),
-                MenuItem::action(t("Open Folder…"), OpenArtifact),
+                MenuItem::action("Open File…", OpenFile),
+                MenuItem::action("Open Folder…", OpenArtifact),
                 recent_menu,
-                MenuItem::action(t("Open Workspace…"), OpenWorkspace),
-                MenuItem::action(t("Open Release Policy…"), OpenPolicy),
+                MenuItem::action("Open Workspace…", OpenWorkspace),
+                MenuItem::action("Open Release Policy…", OpenPolicy),
                 MenuItem::separator(),
-                MenuItem::action(t("Compare Artifacts…"), CompareArtifacts),
-                MenuItem::action(t("Compare Folders…"), CompareFolders),
+                MenuItem::action("Compare Artifacts…", CompareArtifacts),
+                MenuItem::action("Compare Folders…", CompareFolders),
                 MenuItem::separator(),
-                MenuItem::action(t("Save Workspace…"), SaveWorkspace),
-                MenuItem::action(t("Export Markdown Report…"), ExportMarkdownReport),
-                MenuItem::action(t("Export PDF Report…"), ExportPdfReport),
-                MenuItem::action(t("Export Visual Report…"), ExportVisualReport),
-                MenuItem::action(t("Capture Window Screenshot…"), CaptureWindowScreenshot),
+                MenuItem::action("Save Workspace…", SaveWorkspace),
+                MenuItem::action("Export Markdown Report…", ExportMarkdownReport),
+                MenuItem::action("Export PDF Report…", ExportPdfReport),
+                MenuItem::action("Export Visual Report…", ExportVisualReport),
+                MenuItem::action("Capture Window Screenshot…", CaptureWindowScreenshot),
             ],
         },
         Menu {
-            name: t("Edit").into(),
+            name: "Edit".into(),
             items: vec![
-                MenuItem::os_action(t("Undo"), Undo, OsAction::Undo),
-                MenuItem::os_action(t("Redo"), Redo, OsAction::Redo),
+                MenuItem::os_action("Undo", Undo, OsAction::Undo),
+                MenuItem::os_action("Redo", Redo, OsAction::Redo),
                 MenuItem::separator(),
-                MenuItem::os_action(t("Cut"), Cut, OsAction::Cut),
-                MenuItem::os_action(t("Copy"), Copy, OsAction::Copy),
-                MenuItem::os_action(t("Paste"), Paste, OsAction::Paste),
-                MenuItem::os_action(t("Select All"), SelectAll, OsAction::SelectAll),
+                MenuItem::os_action("Cut", Cut, OsAction::Cut),
+                MenuItem::os_action("Copy", Copy, OsAction::Copy),
+                MenuItem::os_action("Paste", Paste, OsAction::Paste),
+                MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
             ],
         },
         Menu {
-            name: t("View").into(),
+            name: "View".into(),
             items: vec![
-                MenuItem::action(t("Focus Search"), FocusSearch),
+                MenuItem::action("Focus Search", FocusSearch),
                 MenuItem::separator(),
-                MenuItem::action(t("Toggle Artifact Tree"), ToggleSidebar),
-                MenuItem::action(t("Toggle Inspector"), ToggleInspector),
+                MenuItem::action("Toggle Artifact Tree", ToggleSidebar),
+                MenuItem::action("Toggle Inspector", ToggleInspector),
                 MenuItem::separator(),
-                MenuItem::action(t("Standard Layout"), LayoutStandard),
-                MenuItem::action(t("Focus Layout"), LayoutFocus),
-                MenuItem::action(t("Analysis Layout"), LayoutAnalysis),
+                MenuItem::action("Standard Layout", LayoutStandard),
+                MenuItem::action("Focus Layout", LayoutFocus),
+                MenuItem::action("Analysis Layout", LayoutAnalysis),
                 MenuItem::separator(),
-                MenuItem::action(t("Toggle High Contrast"), ToggleHighContrast),
+                MenuItem::action("Toggle High Contrast", ToggleHighContrast),
             ],
         },
         Menu {
-            name: t("Language").into(),
-            items: i18n::LANGUAGES
-                .iter()
-                .map(|(code, name)| {
-                    MenuItem::action(
-                        format!(
-                            "{}{}",
-                            if *code == i18n::language() {
-                                "✓ "
-                            } else {
-                                ""
-                            },
-                            name
-                        ),
-                        SetLanguage {
-                            code: (*code).to_owned(),
-                        },
-                    )
-                })
-                .collect(),
+            name: "Help".into(),
+            items: vec![MenuItem::action("Discord", OpenDiscord)],
         },
         Menu {
-            name: t("Help").into(),
-            items: vec![MenuItem::action(t("Discord"), OpenDiscord)],
-        },
-        Menu {
-            name: t("Window").into(),
+            name: "Window".into(),
             items: vec![],
         },
     ]);
 }
 
 fn open_hexlora_window(cx: &mut App) {
+    // Never open larger than the display: an oversized window pushes the status bar and the
+    // bottom of every panel off-screen.
+    let mut window_size = size(px(1440.), px(900.));
+    if let Some(display) = cx.primary_display() {
+        let available = display.bounds().size;
+        window_size.width = window_size.width.min(available.width - px(48.));
+        window_size.height = window_size.height.min(available.height - px(120.));
+    }
+    let bounds = Bounds::centered(None, window_size, cx);
     cx.spawn(async move |cx| {
         cx.open_window(
             WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds {
-                    origin: point(px(80.), px(60.)),
-                    size: size(px(1440.), px(900.)),
-                })),
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                window_min_size: Some(size(px(960.), px(600.))),
                 titlebar: Some(TitlebarOptions {
                     title: Some("Hexlora".into()),
                     ..Default::default()
@@ -6727,63 +6921,12 @@ fn new_window(_: &NewWindow, cx: &mut App) {
     open_hexlora_window(cx);
 }
 
-#[derive(Clone, PartialEq, Action)]
-#[action(namespace = hexlora, no_json)]
-struct SetLanguage {
-    code: String,
-}
-
-fn change_language(action: &SetLanguage, cx: &mut App) {
-    i18n::set_language(&action.code);
-    let mut preferences = load_ui_preferences();
-    preferences.language = Some(i18n::language().to_owned());
-    if let Err(error) = store_ui_preferences(&preferences) {
-        eprintln!("Could not save language preference: {error}");
-    }
-    install_menus(cx);
-    cx.defer(|cx| {
-        for handle in cx.windows() {
-            let _ = handle.update(cx, |_, window, cx| {
-                let view = cx
-                    .global::<WindowViews>()
-                    .0
-                    .get(&window.window_handle().window_id())
-                    .and_then(WeakEntity::upgrade);
-                if let Some(view) = view {
-                    view.update(cx, |this, cx| {
-                        this.search_input.update(cx, |input, cx| {
-                            input.set_placeholder(
-                                t("Search artifact, symbols, strings, or enter hex bytes…"),
-                                window,
-                                cx,
-                            )
-                        });
-                        this.note_input.update(cx, |input, cx| {
-                            input.set_placeholder(
-                                t("Add or replace note for selected node…"),
-                                window,
-                                cx,
-                            )
-                        });
-                        cx.notify();
-                    });
-                }
-            });
-        }
-    });
-}
-
 fn main() {
-    let preferred = load_ui_preferences()
-        .language
-        .unwrap_or_else(i18n::system_language);
-    i18n::set_language(&preferred);
     Application::new().run(|cx| {
         gpui_component::init(cx);
         configure_component_theme(cx);
         cx.set_global(WindowViews::default());
         cx.activate(true);
-        cx.on_action(change_language);
         cx.on_action(quit);
         cx.on_action(new_window);
         cx.on_action(open_file_from_menu);
