@@ -376,7 +376,9 @@ fn hash_source(path: &Path, cancel: &CancellationToken) -> Result<String> {
         source,
     })?;
     let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 1024 * 1024];
+    // Heap-allocated: the desktop app audits on worker threads with 512 KiB stacks, where a
+    // 1 MiB stack buffer overflows before the first byte is read.
+    let mut buffer = vec![0u8; 1024 * 1024];
     loop {
         cancel.check()?;
         let read = file.read(&mut buffer).map_err(|source| HexloraError::Io {
@@ -1117,6 +1119,26 @@ mod tests {
             );
         }
         assert_ipaview_contract(&report);
+    }
+
+    #[test]
+    fn audits_on_a_worker_thread_with_a_small_stack() {
+        // The desktop app audits on dispatch worker threads, whose stacks are 512 KiB.
+        let temporary = tempfile::tempdir().expect("create fixture directory");
+        let ipa = temporary.path().join("SmallStack.ipa");
+        let file = std::fs::File::create(&ipa).expect("create IPA fixture");
+        let mut writer = zip::ZipWriter::new(file);
+        add_file(&mut writer, "Payload/Small.app/Info.plist", &plist(""));
+        writer.finish().expect("finish IPA fixture");
+        let artifact = open_artifact(&ipa, &CancellationToken::default()).expect("open IPA");
+        std::thread::Builder::new()
+            .stack_size(512 * 1024)
+            .spawn(move || {
+                audit_ipa(&artifact, &CancellationToken::default()).expect("audit IPA");
+            })
+            .expect("spawn worker")
+            .join()
+            .expect("audit must not overflow a 512 KiB stack");
     }
 
     #[test]

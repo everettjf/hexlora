@@ -4,7 +4,6 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::{
     Disableable, PixelsExt, Root, Sizable, StyledExt, Theme, ThemeMode,
-    badge::Badge,
     button::{Button, ButtonVariants as _, DropdownButton},
     chart::{AreaChart, BarChart, PieChart},
     input::{Copy, Cut, Input, InputEvent, InputState, Paste, Redo, SelectAll, Undo},
@@ -354,6 +353,8 @@ struct HexloraApp {
     tools: Arc<ToolRegistry>,
     tool_output: Option<(SharedString, SharedString)>,
     tab: InspectorTab,
+    tab_scroll: ScrollHandle,
+    tab_scroll_synced: std::cell::Cell<Option<InspectorTab>>,
     loading: bool,
     task_generation: u64,
     status: SharedString,
@@ -434,6 +435,8 @@ impl HexloraApp {
             tools: Arc::new(ToolRegistry::standard()),
             tool_output: None,
             tab: InspectorTab::Overview,
+            tab_scroll: ScrollHandle::new(),
+            tab_scroll_synced: std::cell::Cell::new(None),
             loading: false,
             task_generation: 0,
             status: "Ready — static inspection only".into(),
@@ -1562,7 +1565,13 @@ impl HexloraApp {
         tabs
     }
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let query = self.query.to_lowercase();
+        // The search box doubles as the tree filter, but a hex byte pattern is not a name:
+        // filtering on it would only empty the tree.
+        let query = if self.file_search_mode == FileSearchMode::Bytes {
+            String::new()
+        } else {
+            self.query.to_lowercase()
+        };
         let rows = Arc::new(
             self.artifact
                 .as_ref()
@@ -1590,6 +1599,16 @@ impl HexloraApp {
             .border_color(rgb(BORDER))
             .overflow_hidden()
             .child(section_header("ARTIFACT TREE"))
+            .when(row_count == 0 && self.artifact.is_some(), |panel| {
+                panel.child(
+                    div()
+                        .px_3()
+                        .py_2()
+                        .text_xs()
+                        .text_color(rgb(MUTED))
+                        .child("No nodes match the search text."),
+                )
+            })
             .child(
                 uniform_list(
                     "artifact-tree-rows",
@@ -2465,6 +2484,11 @@ impl HexloraApp {
         let tabs_for_menu = tabs.clone();
         let menu_view = cx.entity();
         let active_tab = self.tab;
+        // Bring the active tab into view whenever it changes, however it was chosen; manual
+        // scrolling of the bar is left alone in between.
+        if self.tab_scroll_synced.replace(Some(active_tab)) != Some(active_tab) {
+            self.tab_scroll.scroll_to_item(selected_tab);
+        }
         div()
             .flex_1()
             .h_full()
@@ -2501,6 +2525,7 @@ impl HexloraApp {
                             .min_w_0()
                             .underline()
                             .small()
+                            .track_scroll(&self.tab_scroll)
                             .suffix(
                                 Button::new("all-inspector-tabs")
                                     .label("All ▾")
@@ -2556,9 +2581,28 @@ impl HexloraApp {
                                         .unwrap_or(0),
                                     _ => 0,
                                 };
-                                Tab::new().label(tab.label()).suffix(
-                                    Badge::new().count(finding_count).color(rgb(DESTRUCTIVE)),
-                                )
+                                // An inline pill after the label; an overlay badge covers the
+                                // last letters of the tab name.
+                                Tab::new()
+                                    .label(tab.label())
+                                    .when(finding_count > 0, |tab| {
+                                        tab.suffix(
+                                            div()
+                                                .ml_1()
+                                                .mr_2()
+                                                .px_1p5()
+                                                .rounded_full()
+                                                .bg(rgb(DESTRUCTIVE))
+                                                .text_color(rgb(ON_PRIMARY))
+                                                .text_size(px(10.))
+                                                .font_semibold()
+                                                .child(if finding_count > 99 {
+                                                    "99+".to_string()
+                                                } else {
+                                                    finding_count.to_string()
+                                                }),
+                                        )
+                                    })
                             }))
                             .on_click(move |index, _, cx| {
                                 if let Some(tab) = tabs_for_click.get(*index).copied() {
@@ -2838,7 +2882,7 @@ impl HexloraApp {
                                                             .text_ellipsis()
                                                             .line_clamp(1)
                                                             .text_color(rgb(TEXT))
-                                                            .child(hit.value.clone()),
+                                                            .child(hit.value.trim().to_string()),
                                                     )
                                                     .child(
                                                         div()
@@ -3183,10 +3227,13 @@ impl HexloraApp {
                     }))
             })
             .collect::<Vec<_>>();
+        // Label roughly eight offsets along the axis instead of every sample.
+        let entropy_tick_margin = chart_data.len().div_ceil(8).max(1);
         div().flex().flex_col().gap_4()
             .child(panel_title("Entropy Profile"))
             .child(div().p_4().rounded_lg().border_1().border_color(rgb(BORDER)).bg(rgb(PANEL)).h(px(260.)).child(
                 AreaChart::new(chart_data).x(|item| item.label.clone()).y(|item| item.value)
+                    .tick_margin(entropy_tick_margin)
                     .stroke(rgb(GREEN)).fill(rgba((GREEN << 8) | 0x33))
             ))
             .child(info_panel("Block heatmap", "Each cell is a distributed 64 KiB sample. Brighter orange cells approach 8 bits/byte and can indicate compression or encryption. Click a cell to inspect its bytes."))
@@ -4323,6 +4370,7 @@ impl HexloraApp {
                     .flex_col()
                     .gap_2()
                     .overflow_x_scroll()
+                    .map(horizontal_scroll_only)
                     .child(
                         div()
                             .flex()
@@ -5193,6 +5241,7 @@ impl HexloraApp {
                     .border_color(rgb(BORDER))
                     .bg(rgb(PANEL))
                     .overflow_x_scroll()
+                    .map(horizontal_scroll_only)
                     .children(rows),
             )
             .into_any_element()
@@ -5551,20 +5600,39 @@ fn panel_title(text: impl Into<SharedString>) -> impl IntoElement {
         .text_color(rgb(TEXT))
         .child(text)
 }
+/// GPUI turns a vertical wheel into sideways movement on containers that only scroll
+/// horizontally, which traps the wheel over wide tables and stops the page from scrolling.
+/// Restricting such a container to its own axis lets vertical wheel events reach the page.
+fn horizontal_scroll_only<E: Styled>(mut element: E) -> E {
+    element.style().restrict_scroll_to_axis = Some(true);
+    element
+}
 fn kv_panel(title: &'static str, values: Vec<(String, String)>) -> impl IntoElement {
+    // Long keys (archive paths, entitlement names) get a wider key column so they wrap less.
+    let longest_key = values
+        .iter()
+        .map(|(key, _)| key.chars().count())
+        .max()
+        .unwrap_or(0);
+    let key_width = if longest_key > 28 { 340. } else { 210. };
     div()
+        .w_full()
         .flex()
         .flex_col()
         .gap_3()
         .child(panel_title(title))
         .child(
             div()
+                .w_full()
+                .flex()
+                .flex_col()
                 .rounded_md()
                 .border_1()
                 .border_color(rgb(BORDER))
                 .bg(rgb(PANEL))
                 .children(values.into_iter().map(|(k, v)| {
                     div()
+                        .w_full()
                         .min_h(px(38.))
                         .py_1p5()
                         .flex()
@@ -5573,7 +5641,7 @@ fn kv_panel(title: &'static str, values: Vec<(String, String)>) -> impl IntoElem
                         .border_color(rgb(BORDER))
                         .child(
                             div()
-                                .w(px(210.))
+                                .w(px(key_width))
                                 .flex_none()
                                 .px_3()
                                 .text_sm()
@@ -5617,13 +5685,21 @@ fn lazy_table_panel(
     const MAX_RENDERED_ROWS: usize = 20_000;
     const ROW_HEIGHT: f32 = 32.;
     const HEADER_HEIGHT: f32 = 34.;
-    // A table always shows at least this many rows (or all of them when it has fewer), even
-    // when several tables share one scrolling page; a table that is alone on a page grows to
-    // fill the remaining height.
+    // Tables up to INLINE_ROWS are laid out at their full height, so the page scrolls as one
+    // surface and the wheel is never captured by a small nested list. Larger tables are
+    // virtualized: they keep at least MIN_VISIBLE_ROWS on screen when several tables share a
+    // page, and a table that is alone on a page grows to fill the remaining height.
+    const INLINE_ROWS: usize = 40;
     const MIN_VISIBLE_ROWS: usize = 12;
     let truncated = total > MAX_RENDERED_ROWS;
     let visible_count = total.min(MAX_RENDERED_ROWS);
-    let list_min_height = visible_count.clamp(1, MIN_VISIBLE_ROWS) as f32 * ROW_HEIGHT;
+    let list_min_rows = if visible_count <= INLINE_ROWS {
+        visible_count.max(1)
+    } else {
+        MIN_VISIBLE_ROWS
+    };
+    let list_min_height = list_min_rows as f32 * ROW_HEIGHT;
+    let fills_page = visible_count > INLINE_ROWS;
 
     // Size columns from their content so long paths and names get the room instead of every
     // column being the same width.
@@ -5667,7 +5743,7 @@ fn lazy_table_panel(
     let row_weights = weights.clone();
 
     div()
-        .flex_1()
+        .when(fills_page, |panel| panel.flex_1())
         .flex()
         .flex_col()
         .gap_3()
@@ -5697,7 +5773,7 @@ fn lazy_table_panel(
         .child(
             div()
                 .id(SharedString::from(format!("table-scroll-{title}")))
-                .flex_1()
+                .when(fills_page, |table| table.flex_1())
                 .min_h(px(HEADER_HEIGHT + list_min_height))
                 .flex()
                 .flex_col()
@@ -5705,7 +5781,7 @@ fn lazy_table_panel(
                 .border_1()
                 .border_color(rgb(BORDER))
                 .bg(rgb(PANEL))
-                .overflow_x_scroll()
+                .overflow_x_scroll().map(horizontal_scroll_only)
                 .child(
                     div()
                         .flex_1()
@@ -6099,15 +6175,26 @@ fn artifact_top_files(root: &ArtifactNode, limit: usize) -> Vec<ChartDatum> {
         .map(|node| (node.name.clone(), node.size))
         .collect::<Vec<_>>();
     files.sort_by_key(|file| std::cmp::Reverse(file.1));
+    let mut seen_labels = std::collections::HashMap::new();
     files
         .into_iter()
-        .take(limit.min(8))
+        .take(limit.min(5))
         .enumerate()
-        .map(|(index, (name, bytes))| ChartDatum {
-            label: truncate_chart_label(&name, 10),
-            value: bytes as f64,
-            bytes,
-            color: CHART_COLORS[index % CHART_COLORS.len()],
+        .map(|(index, (name, bytes))| {
+            // The chart positions bars by label, so two files with the same name (a common
+            // case for CodeResources or Info.plist) would be drawn on top of each other.
+            let mut label = truncate_chart_label(&name, 9);
+            let duplicates = seen_labels.entry(label.clone()).or_insert(0usize);
+            *duplicates += 1;
+            if *duplicates > 1 {
+                label = format!("{label} ({duplicates})");
+            }
+            ChartDatum {
+                label,
+                value: bytes as f64,
+                bytes,
+                color: CHART_COLORS[index % CHART_COLORS.len()],
+            }
         })
         .collect()
 }
@@ -6418,6 +6505,21 @@ fn bar_chart_card(
     data: Vec<ChartDatum>,
     unit: &'static str,
 ) -> impl IntoElement {
+    // More than eight bars leaves no room for the value printed above each one, and the chart
+    // positions bars by label, so repeated labels would be drawn on top of each other.
+    let mut seen_labels = std::collections::HashMap::new();
+    let data = data
+        .into_iter()
+        .take(8)
+        .map(|mut datum| {
+            let count = seen_labels.entry(datum.label.clone()).or_insert(0usize);
+            *count += 1;
+            if *count > 1 {
+                datum.label = format!("{} ({count})", datum.label);
+            }
+            datum
+        })
+        .collect::<Vec<_>>();
     // Skip every other axis label once the bars get narrow so labels never overlap.
     let tick_margin = data.len().div_ceil(5).max(1);
     div()

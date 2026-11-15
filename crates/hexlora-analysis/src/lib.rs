@@ -275,7 +275,7 @@ impl ArtifactReader {
                     ));
                 }
                 let mut skipped = 0u64;
-                let mut scratch = [0u8; 64 * 1024];
+                let mut scratch = vec![0u8; 64 * 1024];
                 while skipped < offset {
                     cancel.check()?;
                     let remaining = (offset - skipped).min(scratch.len() as u64) as usize;
