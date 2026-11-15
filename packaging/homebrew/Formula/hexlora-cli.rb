@@ -1,8 +1,8 @@
 class HexloraCli < Formula
   desc "Static application, package, and binary inspection workbench"
   homepage "https://atomsprout.com/hexlora/"
-  url "https://github.com/everettjf/homebrew-tap/releases/download/hexlora-v1.1.23/hexlora-cli-1.1.23-aarch64-apple-darwin.tar.gz"
-  sha256 "a59bec656119bcbf93ffb5cef0007e687660b2be3429f8144fe85cac227f97af"
+  url "https://github.com/everettjf/homebrew-tap/releases/download/hexlora-v1.2.0/hexlora-cli-1.2.0-aarch64-apple-darwin.tar.gz"
+  sha256 "6e8e5732afb2f42b304823cc9b07c6e753d3f3bce5028d41fde82472a4299135"
   license "Apache-2.0"
 
   depends_on arch: :arm64
