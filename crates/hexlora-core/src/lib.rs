@@ -165,15 +165,31 @@ impl ArtifactNode {
         match self.source.as_ref() {
             Some(ArtifactSource::ArchiveMember { is_directory, .. }) => !is_directory,
             Some(ArtifactSource::ContainerFile { .. }) => true,
-            Some(ArtifactSource::Filesystem { path }) => !path.is_dir(),
-            None => !self.path.is_dir(),
+            Some(ArtifactSource::Filesystem { .. }) | None => !self.is_dir(),
         }
     }
     pub fn is_dir(&self) -> bool {
-        self.source
-            .as_ref()
-            .map(ArtifactSource::is_dir)
-            .unwrap_or_else(|| self.path.is_dir())
+        match self.source.as_ref() {
+            Some(ArtifactSource::ArchiveMember { is_directory, .. }) => *is_directory,
+            Some(ArtifactSource::ContainerFile { .. }) => false,
+            Some(ArtifactSource::Filesystem { .. }) | None => self.filesystem_is_dir(),
+        }
+    }
+    /// Discovered files always carry a detected format and populated
+    /// directories always have children, so the file system is consulted only
+    /// for the rare node that has neither. Walking a large tree would otherwise
+    /// cost one `stat` per node on every traversal.
+    fn filesystem_is_dir(&self) -> bool {
+        if !self.children.is_empty() {
+            return true;
+        }
+        if self.format.is_some() {
+            return false;
+        }
+        match self.source.as_ref() {
+            Some(ArtifactSource::Filesystem { path }) => path.is_dir(),
+            _ => self.path.is_dir(),
+        }
     }
     fn collect_files<'a>(&'a self, out: &mut Vec<&'a ArtifactNode>) {
         if self.is_file() {
@@ -423,7 +439,7 @@ impl Workspace {
             path: path.into(),
             source,
         })?;
-        let workspace: Self = serde_json::from_reader(file)
+        let workspace: Self = serde_json::from_reader(std::io::BufReader::new(file))
             .map_err(|error| HexloraError::Malformed(format!("workspace: {error}")))?;
         if workspace.version != 1 {
             return Err(HexloraError::Malformed(format!(
@@ -439,11 +455,28 @@ impl Workspace {
             path: temporary.clone(),
             source,
         })?;
-        serde_json::to_writer_pretty(file, self)
-            .map_err(|error| HexloraError::Malformed(format!("workspace: {error}")))?;
-        std::fs::rename(&temporary, path).map_err(|source| HexloraError::Io {
-            path: path.into(),
-            source,
+        let written = (|| {
+            use std::io::Write;
+            let mut writer = std::io::BufWriter::new(file);
+            serde_json::to_writer_pretty(&mut writer, self).map_err(std::io::Error::other)?;
+            writer.flush()?;
+            writer.get_ref().sync_all()
+        })();
+        if let Err(source) = written {
+            // A failed save must not leave a truncated sibling file behind or
+            // replace the previous workspace.
+            let _ = std::fs::remove_file(&temporary);
+            return Err(HexloraError::Io {
+                path: temporary,
+                source,
+            });
+        }
+        std::fs::rename(&temporary, path).map_err(|source| {
+            let _ = std::fs::remove_file(&temporary);
+            HexloraError::Io {
+                path: path.into(),
+                source,
+            }
         })
     }
 }
@@ -555,5 +588,28 @@ mod tests {
             serde_json::from_value(value).expect("deserialize legacy artifact node");
         assert!(decoded.source.is_none());
         assert_eq!(decoded.path, PathBuf::from("/tmp/legacy.bin"));
+    }
+
+    #[test]
+    fn discovered_nodes_are_classified_without_touching_the_file_system() {
+        // Neither path exists, so any answer has to come from the node itself.
+        let mut file = ArtifactNode::new(
+            "missing.bin",
+            PathBuf::from("/nonexistent/hexlora/missing.bin"),
+            ArtifactKind::Unknown,
+        );
+        file.format = Some(FileFormat::UnknownBinary);
+        assert!(file.is_file());
+        assert!(!file.is_dir());
+
+        let mut directory = ArtifactNode::new(
+            "missing",
+            PathBuf::from("/nonexistent/hexlora"),
+            ArtifactKind::Directory,
+        );
+        directory.children.push(file);
+        assert!(directory.is_dir());
+        assert!(!directory.is_file());
+        assert_eq!(directory.files().count(), 1);
     }
 }

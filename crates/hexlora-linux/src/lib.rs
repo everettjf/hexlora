@@ -158,22 +158,34 @@ struct ArMember {
 }
 
 fn read_ar_members(path: &Path, retain_data: bool) -> Result<Vec<ArMember>> {
-    let bytes = std::fs::read(path).map_err(|source| HexloraError::Io {
+    use std::io::{Seek, SeekFrom};
+
+    let io_error = |source| HexloraError::Io {
         path: path.to_path_buf(),
         source,
-    })?;
-    if !bytes.starts_with(b"!<arch>\n") {
+    };
+    let metadata = std::fs::metadata(path).map_err(io_error)?;
+    if !metadata.is_file() {
+        return Err(HexloraError::Malformed("not a regular file".into()));
+    }
+    let total = metadata.len();
+    let mut file = std::fs::File::open(path).map_err(io_error)?;
+    // Only the member headers are read up front. Reading the complete file here
+    // made every multi-gigabyte artifact pay for a Debian package probe.
+    let mut magic = [0u8; 8];
+    if total < 8 || file.read_exact(&mut magic).is_err() || &magic != b"!<arch>\n" {
         return Err(HexloraError::Malformed("invalid ar header".into()));
     }
-    let mut offset = 8usize;
+    let mut offset = 8u64;
     let mut members = Vec::new();
-    while offset < bytes.len() {
+    while offset < total {
         if members.len() >= 100_000 {
             return Err(HexloraError::Limit("ar member count exceeds 100000".into()));
         }
-        let header = bytes
-            .get(offset..offset + 60)
-            .ok_or_else(|| HexloraError::Malformed("truncated ar member header".into()))?;
+        let mut header = [0u8; 60];
+        file.seek(SeekFrom::Start(offset)).map_err(io_error)?;
+        file.read_exact(&mut header)
+            .map_err(|_| HexloraError::Malformed("truncated ar member header".into()))?;
         if &header[58..60] != b"`\n" {
             return Err(HexloraError::Malformed("invalid ar member trailer".into()));
         }
@@ -182,37 +194,44 @@ fn read_ar_members(path: &Path, retain_data: bool) -> Result<Vec<ArMember>> {
             .trim();
         let size = std::str::from_utf8(&header[48..58])
             .ok()
-            .and_then(|value| value.trim().parse::<usize>().ok())
+            .and_then(|value| value.trim().parse::<u64>().ok())
             .ok_or_else(|| HexloraError::Malformed("invalid ar member size".into()))?;
-        if size as u64 > MAX_MEMBER_BYTES {
+        if size > MAX_MEMBER_BYTES {
             return Err(HexloraError::Limit("ar member exceeds 2 GiB".into()));
         }
         let mut data_start = offset + 60;
         let mut data_size = size;
+        if data_start + size > total {
+            return Err(HexloraError::Malformed("truncated ar member".into()));
+        }
         let name = if let Some(length) = raw_name
             .strip_prefix("#1/")
-            .and_then(|value| value.parse::<usize>().ok())
+            .and_then(|value| value.parse::<u64>().ok())
         {
-            let name_bytes = bytes
-                .get(data_start..data_start + length)
-                .ok_or_else(|| HexloraError::Malformed("truncated BSD ar name".into()))?;
+            if length > size || length > 4096 {
+                return Err(HexloraError::Malformed("truncated BSD ar name".into()));
+            }
+            let mut name_bytes = vec![0u8; length as usize];
+            file.read_exact(&mut name_bytes)
+                .map_err(|_| HexloraError::Malformed("truncated BSD ar name".into()))?;
             data_start += length;
-            data_size = data_size.saturating_sub(length);
-            String::from_utf8_lossy(name_bytes).into_owned()
+            data_size -= length;
+            String::from_utf8_lossy(&name_bytes)
+                .trim_end_matches('\0')
+                .to_owned()
         } else {
             raw_name.trim_end_matches('/').to_owned()
         };
-        let data = bytes
-            .get(data_start..data_start + data_size)
-            .ok_or_else(|| HexloraError::Malformed("truncated ar member".into()))?;
-        members.push(ArMember {
-            name,
-            data: if retain_data {
-                data.to_vec()
-            } else {
-                Vec::new()
-            },
-        });
+        let data = if retain_data {
+            let mut data = vec![0u8; data_size as usize];
+            file.seek(SeekFrom::Start(data_start)).map_err(io_error)?;
+            file.read_exact(&mut data)
+                .map_err(|_| HexloraError::Malformed("truncated ar member".into()))?;
+            data
+        } else {
+            Vec::new()
+        };
+        members.push(ArMember { name, data });
         offset = offset + 60 + size + (size % 2);
     }
     Ok(members)
@@ -470,5 +489,31 @@ mod tests {
                 .iter()
                 .any(|finding| finding.rule_id == "linux.deb.privileged-file-mode")
         );
+    }
+
+    #[test]
+    fn package_probe_reads_headers_only() {
+        let directory = tempfile::tempdir().unwrap();
+        assert!(!is_deb(directory.path()));
+        let short = directory.path().join("short");
+        std::fs::write(&short, b"!<ar").unwrap();
+        assert!(!is_deb(&short));
+
+        // A sparse multi-gigabyte file must be rejected from its first bytes.
+        let huge = directory.path().join("huge.bin");
+        let file = std::fs::File::create(&huge).unwrap();
+        file.set_len(8 * 1024 * 1024 * 1024).unwrap();
+        let started = std::time::Instant::now();
+        assert!(!is_deb(&huge));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+
+        // A member that claims more bytes than the file holds is malformed.
+        let truncated = directory.path().join("truncated.deb");
+        let mut bytes = b"!<arch>\n".to_vec();
+        bytes.extend_from_slice(b"debian-binary   0           0     0     100644  4096      `\n");
+        bytes.extend_from_slice(b"2.0\n");
+        std::fs::write(&truncated, bytes).unwrap();
+        assert!(!is_deb(&truncated));
+        assert!(audit_deb(&truncated).is_err());
     }
 }

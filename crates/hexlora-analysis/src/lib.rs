@@ -15,7 +15,7 @@ use std::{
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     time::SystemTime,
@@ -31,6 +31,7 @@ const MAX_ARCHIVE_DECLARED_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 const MAX_ARCHIVE_COMPRESSION_RATIO: u64 = 1_000;
 const MAX_ASAR_HEADER_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_CAR_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_FLATTENED_ENTRIES: usize = 20_000;
 
 #[derive(Clone, Default)]
 pub struct CancellationToken(Arc<AtomicBool>);
@@ -49,6 +50,171 @@ impl CancellationToken {
     pub fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::Relaxed)
     }
+}
+
+/// A cloneable, buffered, positional reader over one open file. Clones share
+/// the file handle but keep independent cursors, which lets a parsed ZIP
+/// central directory be reused without reopening or reparsing the container.
+struct SharedFile {
+    file: Arc<File>,
+    length: u64,
+    position: u64,
+    buffer: Vec<u8>,
+    buffer_start: u64,
+}
+
+impl SharedFile {
+    const BUFFER_BYTES: usize = 16 * 1024;
+
+    fn new(file: File, length: u64) -> Self {
+        Self {
+            file: Arc::new(file),
+            length,
+            position: 0,
+            buffer: Vec::new(),
+            buffer_start: 0,
+        }
+    }
+
+    #[cfg(unix)]
+    fn read_at(&self, buffer: &mut [u8], offset: u64) -> std::io::Result<usize> {
+        std::os::unix::fs::FileExt::read_at(self.file.as_ref(), buffer, offset)
+    }
+
+    #[cfg(windows)]
+    fn read_at(&self, buffer: &mut [u8], offset: u64) -> std::io::Result<usize> {
+        std::os::windows::fs::FileExt::seek_read(self.file.as_ref(), buffer, offset)
+    }
+}
+
+impl Clone for SharedFile {
+    fn clone(&self) -> Self {
+        Self {
+            file: Arc::clone(&self.file),
+            length: self.length,
+            position: 0,
+            buffer: Vec::new(),
+            buffer_start: 0,
+        }
+    }
+}
+
+impl Read for SharedFile {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        if out.is_empty() || self.position >= self.length {
+            return Ok(0);
+        }
+        let buffered = self.position >= self.buffer_start
+            && self.position < self.buffer_start + self.buffer.len() as u64;
+        if !buffered {
+            if out.len() >= Self::BUFFER_BYTES {
+                let count = self.read_at(out, self.position)?;
+                self.position += count as u64;
+                return Ok(count);
+            }
+            let mut buffer = std::mem::take(&mut self.buffer);
+            buffer.resize(Self::BUFFER_BYTES, 0);
+            let count = self.read_at(&mut buffer, self.position)?;
+            buffer.truncate(count);
+            self.buffer = buffer;
+            self.buffer_start = self.position;
+            if count == 0 {
+                return Ok(0);
+            }
+        }
+        let start = (self.position - self.buffer_start) as usize;
+        let count = out.len().min(self.buffer.len() - start);
+        out[..count].copy_from_slice(&self.buffer[start..start + count]);
+        self.position += count as u64;
+        Ok(count)
+    }
+}
+
+impl Seek for SharedFile {
+    fn seek(&mut self, target: SeekFrom) -> std::io::Result<u64> {
+        let position = match target {
+            SeekFrom::Start(offset) => Some(offset),
+            SeekFrom::End(delta) => self.length.checked_add_signed(delta),
+            SeekFrom::Current(delta) => self.position.checked_add_signed(delta),
+        };
+        self.position = position.ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "seek out of range")
+        })?;
+        Ok(self.position)
+    }
+}
+
+type SharedZip = zip::ZipArchive<SharedFile>;
+
+struct CachedZip {
+    path: PathBuf,
+    length: u64,
+    modified: Option<SystemTime>,
+    archive: SharedZip,
+}
+
+/// Recently parsed ZIP central directories. Reading a member used to reparse
+/// the complete directory, which is quadratic for packages with many members.
+static ZIP_CACHE: Mutex<Vec<CachedZip>> = Mutex::new(Vec::new());
+const ZIP_CACHE_ENTRIES: usize = 4;
+
+fn open_zip(path: &Path) -> Result<SharedZip> {
+    let io_error = |source| HexloraError::Io {
+        path: path.into(),
+        source,
+    };
+    let metadata = std::fs::metadata(path).map_err(io_error)?;
+    let length = metadata.len();
+    let modified = metadata.modified().ok();
+    {
+        let mut cache = ZIP_CACHE
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if let Some(index) = cache.iter().position(|cached| {
+            cached.path == path && cached.length == length && cached.modified == modified
+        }) {
+            let cached = cache.remove(index);
+            let archive = cached.archive.clone();
+            cache.push(cached);
+            return Ok(archive);
+        }
+    }
+    let file = File::open(path).map_err(io_error)?;
+    let archive = zip::ZipArchive::new(SharedFile::new(file, length))
+        .map_err(|error| HexloraError::Malformed(format!("ZIP: {error}")))?;
+    let mut cache = ZIP_CACHE
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    cache.retain(|cached| cached.path != path);
+    if cache.len() >= ZIP_CACHE_ENTRIES {
+        cache.remove(0);
+    }
+    cache.push(CachedZip {
+        path: path.into(),
+        length,
+        modified,
+        archive: archive.clone(),
+    });
+    Ok(archive)
+}
+
+/// Why an archive member must not be decompressed, if it must not. Such members
+/// stay visible in the tree; only reading their bytes is refused.
+fn archive_member_block_reason(compressed_size: u64, uncompressed_size: u64) -> Option<String> {
+    if uncompressed_size > MAX_ARCHIVE_MEMBER_BYTES {
+        return Some(format!(
+            "member expands to {uncompressed_size} bytes, above the {MAX_ARCHIVE_MEMBER_BYTES} byte read limit"
+        ));
+    }
+    if uncompressed_size > 64 * 1024 * 1024
+        && compressed_size > 0
+        && uncompressed_size / compressed_size > MAX_ARCHIVE_COMPRESSION_RATIO
+    {
+        return Some(format!(
+            "member expands more than {MAX_ARCHIVE_COMPRESSION_RATIO} times its compressed size"
+        ));
+    }
+    None
 }
 
 pub struct ArtifactReader {
@@ -72,8 +238,21 @@ impl ArtifactReader {
                 })?
                 .len(),
             ArtifactSource::ArchiveMember {
-                uncompressed_size, ..
-            } => *uncompressed_size,
+                compressed_size,
+                uncompressed_size,
+                is_directory,
+                ..
+            } => {
+                if !is_directory
+                    && let Some(reason) =
+                        archive_member_block_reason(*compressed_size, *uncompressed_size)
+                {
+                    return Err(HexloraError::Limit(format!(
+                        "archive {reason}; Hexlora did not decompress it"
+                    )));
+                }
+                *uncompressed_size
+            }
             ArtifactSource::ContainerFile { size, .. } => *size,
         };
         Ok(Self { source, length })
@@ -189,12 +368,7 @@ impl ArtifactReader {
                         "cannot read an archive directory".into(),
                     ));
                 }
-                let file = File::open(container).map_err(|source| HexloraError::Io {
-                    path: container.clone(),
-                    source,
-                })?;
-                let mut archive = zip::ZipArchive::new(file)
-                    .map_err(|error| HexloraError::Malformed(format!("ZIP: {error}")))?;
+                let mut archive = open_zip(container)?;
                 let mut entry = archive
                     .by_index(*entry_index)
                     .map_err(|error| HexloraError::Malformed(format!("ZIP entry: {error}")))?;
@@ -257,12 +431,7 @@ impl ArtifactReader {
                         "cannot read bytes from an archive directory".into(),
                     ));
                 }
-                let file = File::open(container).map_err(|source| HexloraError::Io {
-                    path: container.clone(),
-                    source,
-                })?;
-                let mut archive = zip::ZipArchive::new(file)
-                    .map_err(|error| HexloraError::Malformed(format!("ZIP: {error}")))?;
+                let mut archive = open_zip(container)?;
                 let mut entry = archive.by_index(*entry_index).map_err(|error| {
                     HexloraError::Malformed(format!("ZIP entry {entry_index}: {error}"))
                 })?;
@@ -358,30 +527,38 @@ pub fn open_artifact(path: &Path, cancel: &CancellationToken) -> Result<Artifact
         source,
     })?;
     if metadata.is_dir() {
-        discover_directory(path, cancel)
-    } else {
-        let mut root = build_file_node(path)?;
-        if root.format == Some(FileFormat::Zip) {
-            populate_zip_members(&mut root, cancel)?;
-        } else if root.format == Some(FileFormat::Asar) {
-            populate_asar_members(&mut root, cancel)?;
-        }
-        Ok(root)
+        return discover_directory(path, cancel);
     }
+    // Opening a FIFO, socket or device would block or read without end.
+    if !std::fs::metadata(path).is_ok_and(|target| target.is_file()) {
+        return Err(HexloraError::Malformed(format!(
+            "{} is not a regular file or directory",
+            path.display()
+        )));
+    }
+    let mut root = build_file_node(path)?;
+    // A container whose member table cannot be read is still a file worth
+    // inspecting: keep it open with Hex, strings and hashes, and say why its
+    // members are missing instead of refusing the whole artifact.
+    let members = if root.format == Some(FileFormat::Zip) {
+        populate_zip_members(&mut root, cancel)
+    } else if root.format == Some(FileFormat::Asar) {
+        populate_asar_members(&mut root, cancel)
+    } else {
+        Ok(())
+    };
+    if let Err(error) = members {
+        cancel.check()?;
+        root.children.clear();
+        root.properties
+            .insert("Archive Members Unavailable".into(), error.to_string());
+    }
+    Ok(root)
 }
 
 fn populate_zip_members(root: &mut ArtifactNode, cancel: &CancellationToken) -> Result<()> {
-    let file = File::open(&root.path).map_err(|source| HexloraError::Io {
-        path: root.path.clone(),
-        source,
-    })?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|error| HexloraError::Malformed(format!("ZIP: {error}")))?;
-    if archive.len() > MAX_FILES {
-        return Err(HexloraError::Limit(format!(
-            "ZIP contains more than {MAX_FILES} entries"
-        )));
-    }
+    let mut archive = open_zip(&root.path)?;
+    let listed = archive.len().min(MAX_FILES);
 
     let mut ipa_info_plist_found = false;
     let mut android_manifest_found = false;
@@ -393,48 +570,38 @@ fn populate_zip_members(root: &mut ArtifactNode, cancel: &CancellationToken) -> 
     let mut appx_manifest_found = false;
     let mut declared_bytes = 0u64;
     let mut member_paths = HashSet::new();
-    for entry_index in 0..archive.len() {
+    let mut child_indexes = HashMap::new();
+    let mut unsafe_members = 0usize;
+    let mut too_deep_members = 0usize;
+    let mut duplicate_members = 0usize;
+    let mut blocked_members = 0usize;
+    let mut corrupt_members = 0usize;
+    for entry_index in 0..listed {
         cancel.check()?;
-        let entry = archive.by_index(entry_index).map_err(|error| {
-            HexloraError::Malformed(format!("ZIP entry {entry_index}: {error}"))
-        })?;
+        let Ok(entry) = archive.by_index_raw(entry_index) else {
+            corrupt_members += 1;
+            continue;
+        };
+        declared_bytes = declared_bytes.saturating_add(entry.size());
+        // Hostile or oversized members are counted and reported, never fatal:
+        // the rest of the package is still worth auditing.
         let Some(member_path) = entry.enclosed_name() else {
+            unsafe_members += 1;
             continue;
         };
         if member_path.components().count().saturating_sub(1) > MAX_DEPTH {
-            return Err(HexloraError::Limit(format!(
-                "archive member depth exceeds {MAX_DEPTH}"
-            )));
-        }
-        if entry.size() > MAX_ARCHIVE_MEMBER_BYTES {
-            return Err(HexloraError::Limit(format!(
-                "archive member {} exceeds {MAX_ARCHIVE_MEMBER_BYTES} bytes",
-                member_path.display()
-            )));
-        }
-        declared_bytes = declared_bytes
-            .checked_add(entry.size())
-            .ok_or_else(|| HexloraError::Limit("archive declared size overflows u64".into()))?;
-        if declared_bytes > MAX_ARCHIVE_DECLARED_BYTES {
-            return Err(HexloraError::Limit(format!(
-                "archive declares more than {MAX_ARCHIVE_DECLARED_BYTES} expanded bytes"
-            )));
-        }
-        if entry.size() > 64 * 1024 * 1024
-            && entry.compressed_size() > 0
-            && entry.size() / entry.compressed_size() > MAX_ARCHIVE_COMPRESSION_RATIO
-        {
-            return Err(HexloraError::Limit(format!(
-                "archive member {} exceeds the maximum compression ratio",
-                member_path.display()
-            )));
+            too_deep_members += 1;
+            continue;
         }
         if !member_paths.insert(member_path.clone()) {
-            return Err(HexloraError::Malformed(format!(
-                "archive contains duplicate member path {}",
-                member_path.display()
-            )));
+            duplicate_members += 1;
+            continue;
         }
+        let blocked = if entry.is_dir() {
+            None
+        } else {
+            archive_member_block_reason(entry.compressed_size(), entry.size())
+        };
         let source = ArtifactSource::ArchiveMember {
             container: root.path.clone(),
             member_path: member_path.clone(),
@@ -459,7 +626,11 @@ fn populate_zip_members(root: &mut ArtifactNode, cancel: &CancellationToken) -> 
         xapk_manifest_found |= member_path == Path::new("manifest.json");
         nested_apk_found |= member_text.to_ascii_lowercase().ends_with(".apk");
         appx_manifest_found |= member_path == Path::new("AppxManifest.xml");
-        insert_archive_member(root, &member_path, source)?;
+        let node = insert_archive_member(root, &member_path, source, &mut child_indexes);
+        if let (Some(node), Some(reason)) = (node, blocked) {
+            blocked_members += 1;
+            node.properties.insert("Read Blocked".into(), reason);
+        }
     }
     if ipa_info_plist_found {
         root.kind = ArtifactKind::Package;
@@ -494,6 +665,48 @@ fn populate_zip_members(root: &mut ArtifactNode, cancel: &CancellationToken) -> 
         .insert("Archive Members".into(), archive.len().to_string());
     root.properties
         .insert("Declared Expanded Size".into(), declared_bytes.to_string());
+    let mut note = |label: &str, count: usize, meaning: &str| {
+        if count > 0 {
+            root.properties
+                .insert(label.into(), format!("{count} · {meaning}"));
+        }
+    };
+    note(
+        "Members Not Listed",
+        archive.len() - listed,
+        "the archive has more entries than Hexlora lists",
+    );
+    note(
+        "Corrupt Member Headers",
+        corrupt_members,
+        "entries whose local header could not be read, hidden from the tree",
+    );
+    note(
+        "Unsafe Member Paths",
+        unsafe_members,
+        "absolute or parent-relative paths, hidden from the tree",
+    );
+    note(
+        "Deeply Nested Members",
+        too_deep_members,
+        "nested beyond the supported depth, hidden from the tree",
+    );
+    note(
+        "Duplicate Member Paths",
+        duplicate_members,
+        "later entries reuse an earlier path; only the first is shown",
+    );
+    note(
+        "Read-Blocked Members",
+        blocked_members,
+        "too large or too compressible to decompress safely",
+    );
+    if declared_bytes > MAX_ARCHIVE_DECLARED_BYTES {
+        root.properties.insert(
+            "Expansion Warning".into(),
+            format!("members declare {declared_bytes} expanded bytes"),
+        );
+    }
     Ok(())
 }
 
@@ -508,21 +721,24 @@ fn is_ipa_info_plist(path: &Path) -> bool {
         && parts[2] == "Info.plist"
 }
 
-fn insert_archive_member(
-    root: &mut ArtifactNode,
+fn insert_archive_member<'a>(
+    root: &'a mut ArtifactNode,
     member_path: &Path,
     source: ArtifactSource,
-) -> Result<()> {
+    child_indexes: &mut HashMap<(uuid::Uuid, String), usize>,
+) -> Option<&'a mut ArtifactNode> {
     let components = member_path.components().collect::<Vec<_>>();
     if components.is_empty() {
-        return Ok(());
+        return None;
     }
     let container_path = root.path.clone();
     let mut current = root;
     for (component_index, component) in components.iter().enumerate() {
         let name = component.as_os_str().to_string_lossy().into_owned();
         let is_last = component_index + 1 == components.len();
-        if let Some(existing_index) = current.children.iter().position(|node| node.name == name) {
+        // A per-parent index keeps flat archives with very many members linear.
+        let key = (current.id, name.clone());
+        if let Some(&existing_index) = child_indexes.get(&key) {
             current = &mut current.children[existing_index];
             if is_last {
                 current.source = Some(source.clone());
@@ -567,10 +783,11 @@ fn insert_archive_member(
                 .insert("Archive Directory".into(), "true".into());
         }
         current.children.push(node);
-        let inserted_index = current.children.len().saturating_sub(1);
+        let inserted_index = current.children.len() - 1;
+        child_indexes.insert(key, inserted_index);
         current = &mut current.children[inserted_index];
     }
-    Ok(())
+    Some(current)
 }
 
 fn apply_archive_source_metadata(node: &mut ArtifactNode, source: &ArtifactSource) {
@@ -907,6 +1124,9 @@ fn discover_directory(path: &Path, cancel: &CancellationToken) -> Result<Artifac
     let mut root = ArtifactNode::new(name, path.to_path_buf(), root_kind);
     let mut count = 0usize;
     let mut child_indexes = HashMap::new();
+    let mut unreadable = 0usize;
+    let mut special = 0usize;
+    let mut truncated = false;
     for entry in WalkDir::new(path)
         .min_depth(1)
         .max_depth(MAX_DEPTH)
@@ -914,21 +1134,49 @@ fn discover_directory(path: &Path, cancel: &CancellationToken) -> Result<Artifac
         .sort_by_file_name()
     {
         cancel.check()?;
-        let entry = entry.map_err(|e| HexloraError::Malformed(e.to_string()))?;
-        count += 1;
-        if count > MAX_FILES {
-            return Err(HexloraError::Limit(format!(
-                "artifact contains more than {MAX_FILES} entries"
-            )));
-        }
-        if entry.file_type().is_symlink() {
+        // One unreadable directory or file must not hide everything else.
+        let Ok(entry) = entry else {
+            unreadable += 1;
+            continue;
+        };
+        let file_type = entry.file_type();
+        if file_type.is_symlink() {
             continue;
         }
-        let relative = entry
-            .path()
-            .strip_prefix(path)
-            .map_err(|e| HexloraError::Malformed(e.to_string()))?;
-        insert_path(&mut root, relative, entry.path(), &mut child_indexes)?;
+        if !file_type.is_file() && !file_type.is_dir() {
+            // FIFOs, sockets and devices block or never end when read.
+            special += 1;
+            continue;
+        }
+        count += 1;
+        if count > MAX_FILES {
+            truncated = true;
+            break;
+        }
+        let Ok(relative) = entry.path().strip_prefix(path) else {
+            continue;
+        };
+        if insert_path(&mut root, relative, entry.path(), &mut child_indexes) {
+            unreadable += 1;
+        }
+    }
+    if truncated {
+        root.properties.insert(
+            "Discovery Truncated".into(),
+            format!("only the first {MAX_FILES} entries are listed"),
+        );
+    }
+    if unreadable > 0 {
+        root.properties.insert(
+            "Unreadable Entries".into(),
+            format!("{unreadable} · permission denied or I/O error while listing"),
+        );
+    }
+    if special > 0 {
+        root.properties.insert(
+            "Special Files Skipped".into(),
+            format!("{special} · pipes, sockets and devices are never opened"),
+        );
     }
     classify_dependencies(&mut root);
     if root.kind == ArtifactKind::Directory
@@ -1000,12 +1248,15 @@ fn logicalize_artifact_tree(root: &mut ArtifactNode) {
     root.children = logical;
 }
 
+/// Insert one discovered path. Returns `true` when the file could not be read
+/// and was added as a placeholder instead.
 fn insert_path(
     root: &mut ArtifactNode,
     relative: &Path,
     absolute: &Path,
     child_indexes: &mut HashMap<(uuid::Uuid, String), usize>,
-) -> Result<()> {
+) -> bool {
+    let mut unreadable = false;
     let mut current = root;
     let parts: Vec<_> = relative.components().collect();
     for (i, part) in parts.iter().enumerate() {
@@ -1022,7 +1273,18 @@ fn insert_path(
             current.path.join(&name)
         };
         let node = if is_last && target.is_file() {
-            build_file_node(&target)?
+            build_file_node(&target).unwrap_or_else(|error| {
+                unreadable = true;
+                let mut node =
+                    ArtifactNode::new(name.clone(), target.clone(), ArtifactKind::Unknown);
+                node.format = Some(FileFormat::UnknownBinary);
+                node.size = std::fs::symlink_metadata(&target)
+                    .map(|metadata| metadata.len())
+                    .unwrap_or(0);
+                node.properties
+                    .insert("Read Error".into(), error.to_string());
+                node
+            })
         } else {
             let kind = classify_directory(&target);
             ArtifactNode::new(name.clone(), target, kind)
@@ -1032,7 +1294,7 @@ fn insert_path(
         child_indexes.insert(key, index);
         current = &mut current.children[index];
     }
-    Ok(())
+    unreadable
 }
 
 fn build_file_node(path: &Path) -> Result<ArtifactNode> {
@@ -1452,17 +1714,22 @@ pub fn inspect_metadata(node: &ArtifactNode) -> Result<indexmap::IndexMap<String
     match node.format {
         Some(FileFormat::Plist) => {
             ensure_structured_metadata_size(node)?;
-            let value = plist::Value::from_file(&node.path)
-                .map_err(|e| HexloraError::Malformed(format!("plist: {e}")))?;
+            let bytes = std::fs::read(&node.path).map_err(|source| HexloraError::Io {
+                path: node.path.clone(),
+                source,
+            })?;
+            let value = parse_plist(&bytes)?;
             flatten_plist("", &value, &mut metadata, 0);
         }
         Some(FileFormat::Json) => {
             ensure_structured_metadata_size(node)?;
-            let file = File::open(&node.path).map_err(|source| HexloraError::Io {
+            // The size is bounded above; parsing a slice avoids a system call
+            // per byte on an unbuffered file.
+            let bytes = std::fs::read(&node.path).map_err(|source| HexloraError::Io {
                 path: node.path.clone(),
                 source,
             })?;
-            let value: serde_json::Value = serde_json::from_reader(file)
+            let value: serde_json::Value = serde_json::from_slice(&bytes)
                 .map_err(|e| HexloraError::Malformed(format!("JSON: {e}")))?;
             flatten_json("", &value, &mut metadata, 0);
         }
@@ -1604,8 +1871,7 @@ fn inspect_archive_member_metadata(
     match format {
         FileFormat::Plist => {
             let bytes = reader.read_all(MAX_STRUCTURED_METADATA_BYTES)?;
-            let value = plist::Value::from_reader(std::io::Cursor::new(bytes))
-                .map_err(|error| HexloraError::Malformed(format!("plist: {error}")))?;
+            let value = parse_plist(&bytes)?;
             flatten_plist("", &value, &mut metadata, 0);
         }
         FileFormat::Json => {
@@ -2211,29 +2477,18 @@ fn inspect_zip_metadata(
     path: &Path,
     metadata: &mut indexmap::IndexMap<String, String>,
 ) -> Result<()> {
-    const MAX_ZIP_ENTRIES: usize = 200_000;
     const MAX_LISTED_ENTRIES: usize = 10_000;
     const SUSPICIOUS_TOTAL_SIZE: u64 = 16 * 1024 * 1024 * 1024;
 
-    let file = File::open(path).map_err(|source| HexloraError::Io {
-        path: path.into(),
-        source,
-    })?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|error| HexloraError::Malformed(format!("ZIP: {error}")))?;
-    if archive.len() > MAX_ZIP_ENTRIES {
-        return Err(HexloraError::Limit(format!(
-            "ZIP contains more than {MAX_ZIP_ENTRIES} entries"
-        )));
-    }
+    let mut archive = open_zip(path)?;
     let mut compressed = 0u64;
     let mut uncompressed = 0u64;
     let mut unsafe_paths = 0usize;
     let mut symlinks = 0usize;
     for index in 0..archive.len() {
-        let entry = archive
-            .by_index_raw(index)
-            .map_err(|error| HexloraError::Malformed(format!("ZIP entry {index}: {error}")))?;
+        let Ok(entry) = archive.by_index_raw(index) else {
+            continue;
+        };
         compressed = compressed.saturating_add(entry.compressed_size());
         uncompressed = uncompressed.saturating_add(entry.size());
         let safe = entry.enclosed_name().is_some();
@@ -3852,18 +4107,65 @@ pub fn inspect_signature_cancellable(
     Ok(result)
 }
 
+/// Deepest collection nesting accepted from a property list.
+pub const MAX_PLIST_DEPTH: usize = 128;
+
+/// Parse an XML or binary property list and reject one that nests too deeply.
+/// The parser is iterative, but dropping or walking a `plist::Value` recurses
+/// once per level, so an adversarial document nested tens of thousands deep
+/// overflows the small stacks of background worker threads. The depth check
+/// and the disposal of a rejected document therefore use explicit stacks.
+pub fn parse_plist(bytes: &[u8]) -> Result<plist::Value> {
+    let value = plist::Value::from_reader(std::io::Cursor::new(bytes))
+        .map_err(|error| HexloraError::Malformed(format!("plist: {error}")))?;
+    let mut too_deep = false;
+    let mut pending = vec![(&value, 1usize)];
+    while let Some((node, depth)) = pending.pop() {
+        let children: Box<dyn Iterator<Item = &plist::Value>> = match node {
+            plist::Value::Array(items) => Box::new(items.iter()),
+            plist::Value::Dictionary(items) => Box::new(items.values()),
+            _ => continue,
+        };
+        if depth > MAX_PLIST_DEPTH {
+            too_deep = true;
+            break;
+        }
+        pending.extend(children.map(|child| (child, depth + 1)));
+    }
+    drop(pending);
+    if !too_deep {
+        return Ok(value);
+    }
+    let mut pending = vec![value];
+    while let Some(node) = pending.pop() {
+        match node {
+            plist::Value::Array(items) => pending.extend(items),
+            plist::Value::Dictionary(items) => {
+                pending.extend(items.into_iter().map(|(_, child)| child))
+            }
+            _ => {}
+        }
+    }
+    Err(HexloraError::Limit(format!(
+        "plist nesting exceeds {MAX_PLIST_DEPTH}"
+    )))
+}
+
 fn flatten_plist(
     prefix: &str,
     value: &plist::Value,
     out: &mut indexmap::IndexMap<String, String>,
     depth: usize,
 ) {
-    if depth > 32 || out.len() >= 20_000 {
+    if depth > 32 || out.len() >= MAX_FLATTENED_ENTRIES {
         return;
     }
     match value {
         plist::Value::Dictionary(items) => {
             for (key, value) in items {
+                if out.len() >= MAX_FLATTENED_ENTRIES {
+                    break;
+                }
                 let path = if prefix.is_empty() {
                     key.clone()
                 } else {
@@ -3874,6 +4176,9 @@ fn flatten_plist(
         }
         plist::Value::Array(items) => {
             for (index, value) in items.iter().enumerate() {
+                if out.len() >= MAX_FLATTENED_ENTRIES {
+                    break;
+                }
                 flatten_plist(&format!("{prefix}[{index}]"), value, out, depth + 1);
             }
         }
@@ -3902,12 +4207,15 @@ fn flatten_json(
     out: &mut indexmap::IndexMap<String, String>,
     depth: usize,
 ) {
-    if depth > 32 || out.len() >= 20_000 {
+    if depth > 32 || out.len() >= MAX_FLATTENED_ENTRIES {
         return;
     }
     match value {
         serde_json::Value::Object(items) => {
             for (key, value) in items {
+                if out.len() >= MAX_FLATTENED_ENTRIES {
+                    break;
+                }
                 let path = if prefix.is_empty() {
                     key.clone()
                 } else {
@@ -3918,6 +4226,9 @@ fn flatten_json(
         }
         serde_json::Value::Array(items) => {
             for (index, value) in items.iter().enumerate() {
+                if out.len() >= MAX_FLATTENED_ENTRIES {
+                    break;
+                }
                 flatten_json(&format!("{prefix}[{index}]"), value, out, depth + 1);
             }
         }
@@ -6098,3 +6409,6 @@ mod tests {
 
 #[cfg(test)]
 mod performance_regressions;
+
+#[cfg(test)]
+mod extreme_inputs;

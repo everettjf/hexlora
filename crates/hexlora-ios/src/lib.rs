@@ -437,8 +437,7 @@ fn relative_to(path: &Path, prefix: &Path) -> String {
 
 fn read_plist(node: &ArtifactNode) -> Result<Value> {
     let bytes = ArtifactReader::open(node)?.read_all(MAX_PLIST_BYTES)?;
-    Value::from_reader(std::io::Cursor::new(bytes))
-        .map_err(|error| HexloraError::Malformed(format!("plist: {error}")))
+    hexlora_analysis::parse_plist(&bytes)
 }
 
 fn string(dict: &plist::Dictionary, key: &str) -> Option<String> {
@@ -656,8 +655,7 @@ fn parse_mobileprovision(node: &ArtifactNode) -> Result<IpaSigning> {
         .position(|window| window == close)
         .ok_or_else(|| HexloraError::Malformed("profile plist is truncated".into()))?;
     let end = xml_start + relative_end + close.len();
-    let value = Value::from_reader(std::io::Cursor::new(&bytes[xml_start..end]))
-        .map_err(|error| HexloraError::Malformed(format!("profile plist: {error}")))?;
+    let value = hexlora_analysis::parse_plist(&bytes[xml_start..end])?;
     let dict = value
         .as_dictionary()
         .ok_or_else(|| HexloraError::Malformed("profile plist root is not a dictionary".into()))?;

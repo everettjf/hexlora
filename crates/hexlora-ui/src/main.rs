@@ -1151,6 +1151,16 @@ impl HexloraApp {
             return;
         };
         if !node.is_file() || self.query.is_empty() {
+            // Say why nothing happened instead of ignoring the click.
+            self.error = Some(
+                if node.is_file() {
+                    "Type the text or bytes to find, then choose Find Next"
+                } else {
+                    "Select a file in the Artifact Tree to search its bytes"
+                }
+                .into(),
+            );
+            cx.notify();
             return;
         }
         self.cancellation.cancel();
@@ -1252,17 +1262,30 @@ impl HexloraApp {
     }
     fn jump_to_offset(&mut self, cx: &mut Context<Self>) {
         let query = self.query.trim();
-        let parsed = query
-            .strip_prefix("0x")
-            .or_else(|| query.strip_prefix("0X"))
-            .and_then(|value| u64::from_str_radix(value, 16).ok())
-            .or_else(|| query.parse::<u64>().ok());
-        if let Some(offset) = parsed {
-            self.hex_offset = offset;
-            self.tab = InspectorTab::Hex;
-            self.status = format!("Jumped to 0x{offset:x}").into();
-        } else {
-            self.error = Some("Enter an offset as decimal or 0x-prefixed hexadecimal".into());
+        let parsed = parse_hex_offset(query).or_else(|| query.parse::<u64>().ok());
+        let length = self
+            .selected_node()
+            .filter(|node| node.is_file())
+            .map(|node| node.size);
+        match (parsed, length) {
+            (Some(offset), Some(length)) if offset >= length => {
+                self.error = Some(
+                    format!("Offset 0x{offset:x} is past the end of the file (0x{length:x} bytes)")
+                        .into(),
+                );
+            }
+            (Some(_), None) => {
+                self.error =
+                    Some("Select a file in the Artifact Tree before jumping to an offset".into());
+            }
+            (Some(offset), Some(_)) => {
+                self.hex_offset = offset;
+                self.tab = InspectorTab::Hex;
+                self.status = format!("Jumped to 0x{offset:x}").into();
+            }
+            (None, _) => {
+                self.error = Some("Enter an offset as decimal or 0x-prefixed hexadecimal".into());
+            }
         }
         cx.notify();
     }
@@ -1270,6 +1293,11 @@ impl HexloraApp {
         let Some(node) = self.selected_node() else {
             return;
         };
+        if !node.is_file() {
+            self.error = Some("Select a file in the Artifact Tree to copy its bytes".into());
+            cx.notify();
+            return;
+        }
         let (offset, length) = self
             .hex_selection
             .map(|(start, end)| {
@@ -1567,7 +1595,10 @@ impl HexloraApp {
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // The search box doubles as the tree filter, but a hex byte pattern is not a name:
         // filtering on it would only empty the tree.
-        let query = if self.file_search_mode == FileSearchMode::Bytes {
+        // The same goes for a `0x…` offset typed for Jump Offset.
+        let query = if self.file_search_mode == FileSearchMode::Bytes
+            || parse_hex_offset(&self.query).is_some()
+        {
             String::new()
         } else {
             self.query.to_lowercase()
@@ -3236,7 +3267,7 @@ impl HexloraApp {
                     .tick_margin(entropy_tick_margin)
                     .stroke(rgb(GREEN)).fill(rgba((GREEN << 8) | 0x33))
             ))
-            .child(info_panel("Block heatmap", "Each cell is a distributed 64 KiB sample. Brighter orange cells approach 8 bits/byte and can indicate compression or encryption. Click a cell to inspect its bytes."))
+            .child(info_panel("Block heatmap", "Each cell is a distributed 64 KiB sample. Grey cells are near-constant data and green is typical code or text. Amber, orange and red cells approach 8 bits/byte and can indicate compression or encryption. Click a cell to inspect its bytes."))
             .child(div().flex().flex_wrap().gap_1().children(cells))
     }
     fn render_signature(&self) -> impl IntoElement {
@@ -5603,6 +5634,15 @@ fn panel_title(text: impl Into<SharedString>) -> impl IntoElement {
 /// GPUI turns a vertical wheel into sideways movement on containers that only scroll
 /// horizontally, which traps the wheel over wide tables and stops the page from scrolling.
 /// Restricting such a container to its own axis lets vertical wheel events reach the page.
+/// Parse a `0x`-prefixed hexadecimal offset.
+fn parse_hex_offset(query: &str) -> Option<u64> {
+    let query = query.trim();
+    query
+        .strip_prefix("0x")
+        .or_else(|| query.strip_prefix("0X"))
+        .and_then(|digits| u64::from_str_radix(digits, 16).ok())
+}
+
 fn horizontal_scroll_only<E: Styled>(mut element: E) -> E {
     element.style().restrict_scroll_to_axis = Some(true);
     element
@@ -5987,6 +6027,47 @@ fn sample_entropy_profile(
     let count = length.div_ceil(SAMPLE_BYTES as u64).clamp(1, MAX_SAMPLES);
     let stride = length.div_ceil(count);
     let mut samples = Vec::with_capacity(count as usize);
+    if matches!(
+        node.source,
+        Some(hexlora_core::ArtifactSource::ArchiveMember { .. })
+    ) {
+        // A compressed member cannot be seeked: every ranged read decompresses
+        // from the start, so sampling it 128 times re-inflated a large member
+        // 128 times. Take all samples in one sequential pass instead.
+        let offsets = (0..count)
+            .map(|index| index.saturating_mul(stride).min(length.saturating_sub(1)))
+            .collect::<Vec<_>>();
+        let mut position = 0u64;
+        let mut next = 0usize;
+        let mut window = Vec::with_capacity(SAMPLE_BYTES);
+        reader.visit_chunks(cancellation, |chunk| {
+            let chunk_end = position + chunk.len() as u64;
+            while let Some(&start) = offsets.get(next) {
+                let end = (start + SAMPLE_BYTES as u64)
+                    .min(offsets.get(next + 1).copied().unwrap_or(length))
+                    .min(length);
+                let low = start.max(position);
+                let high = end.min(chunk_end);
+                if low < high {
+                    window.extend_from_slice(
+                        &chunk[(low - position) as usize..(high - position) as usize],
+                    );
+                }
+                if chunk_end < end {
+                    break;
+                }
+                samples.push(EntropySample {
+                    label: format!("{start:x}"),
+                    offset: start,
+                    entropy: entropy(&window),
+                });
+                window.clear();
+                next += 1;
+            }
+            position = chunk_end;
+        })?;
+        return Ok(samples);
+    }
     for index in 0..count {
         cancellation.check()?;
         let offset = index.saturating_mul(stride).min(length.saturating_sub(1));
@@ -6010,7 +6091,8 @@ fn entropy_color(value: f64) -> u32 {
     } else if value >= 2.5 {
         SUCCESS
     } else {
-        ACCENT
+        // Near-constant data is the quiet end of the scale, not a caution.
+        SLATE
     }
 }
 

@@ -416,6 +416,12 @@ pub fn inspect(
             break;
         }
         let mut errors = Vec::new();
+        if let Some(message) = node.properties.get("Read Error") {
+            errors.push(ReportError {
+                stage: "discovery",
+                message: message.clone(),
+            });
+        }
         let mut analysis = if parse_files {
             match analyze_node(node) {
                 Ok(analysis) => analysis,
@@ -562,6 +568,21 @@ pub fn inspect(
         });
     }
 
+    // Anything discovery had to leave out makes the report partial rather than
+    // silently complete.
+    for key in [
+        "Archive Members Unavailable",
+        "Discovery Truncated",
+        "Unreadable Entries",
+        "Members Not Listed",
+    ] {
+        if let Some(message) = artifact.properties.get(key) {
+            run_errors.push(ReportError {
+                stage: "discovery",
+                message: format!("{key}: {message}"),
+            });
+        }
+    }
     let dependency_graph = if want_graph && !cancellation.is_cancelled() {
         match build_dependency_graph(&artifact, cancellation) {
             Ok(graph) => Some(graph),
@@ -732,14 +753,45 @@ fn write_report(
 }
 
 fn write_bytes(contents: &str, output: Option<&Path>) -> io::Result<()> {
-    match output {
-        Some(path) => std::fs::write(path, contents),
-        None => {
-            let mut stdout = io::stdout().lock();
-            stdout.write_all(contents.as_bytes())?;
-            stdout.write_all(b"\n")
+    write_output(output, |writer| {
+        writer.write_all(contents.as_bytes())?;
+        if output.is_none() {
+            writer.write_all(b"\n")?;
         }
+        Ok(())
+    })
+}
+
+/// Write a report through a buffered writer. Regular files are replaced
+/// atomically; devices, pipes and other special files such as `/dev/null`
+/// cannot be renamed over, so they are written in place.
+fn write_output(
+    output: Option<&Path>,
+    write: impl FnOnce(&mut dyn Write) -> io::Result<()>,
+) -> io::Result<()> {
+    let Some(path) = output else {
+        let mut writer = BufWriter::new(io::stdout().lock());
+        write(&mut writer)?;
+        return writer.flush();
+    };
+    if std::fs::metadata(path).is_ok_and(|metadata| !metadata.is_file() && !metadata.is_dir()) {
+        let mut writer = BufWriter::new(std::fs::OpenOptions::new().write(true).open(path)?);
+        write(&mut writer)?;
+        return writer.flush();
     }
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    {
+        let mut writer = BufWriter::new(temporary.as_file_mut());
+        write(&mut writer)?;
+        writer.flush()?;
+    }
+    temporary.as_file().sync_all()?;
+    temporary.persist(path).map_err(|error| error.error)?;
+    Ok(())
 }
 
 fn all_report_findings(report: &InspectionReport) -> Vec<(Severity, String, String)> {
@@ -874,34 +926,14 @@ fn render_sarif(report: &InspectionReport) -> serde_json::Value {
 }
 
 fn write_json(report: &impl Serialize, output: Option<&Path>, pretty: bool) -> io::Result<()> {
-    match output {
-        Some(path) => {
-            let parent = path
-                .parent()
-                .filter(|parent| !parent.as_os_str().is_empty())
-                .unwrap_or(Path::new("."));
-            let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-            if pretty {
-                serde_json::to_writer_pretty(&mut temporary, report)?;
-            } else {
-                serde_json::to_writer(&mut temporary, report)?;
-            }
-            temporary.write_all(b"\n")?;
-            temporary.as_file().sync_all()?;
-            temporary.persist(path).map_err(|error| error.error)?;
-            Ok(())
+    write_output(output, |mut writer| {
+        if pretty {
+            serde_json::to_writer_pretty(&mut writer, report)?;
+        } else {
+            serde_json::to_writer(&mut writer, report)?;
         }
-        None => {
-            let stdout = io::stdout().lock();
-            let mut writer = BufWriter::new(stdout);
-            if pretty {
-                serde_json::to_writer_pretty(&mut writer, report)?;
-            } else {
-                serde_json::to_writer(&mut writer, report)?;
-            }
-            writer.write_all(b"\n")
-        }
-    }
+        writer.write_all(b"\n")
+    })
 }
 
 fn report_reaches_threshold(report: &InspectionReport, threshold: SeverityThreshold) -> bool {
@@ -985,5 +1017,44 @@ mod tests {
         assert!(report.files[0].summary.entropy.is_some());
         assert!(report.files[0].strings.is_some());
         let _ = std::fs::remove_file(path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reports_can_be_written_to_special_files() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("sample.bin");
+        std::fs::write(&path, b"sample").unwrap();
+        let report = inspect(&arguments(path), &CancellationToken::default()).unwrap();
+        for format in [ReportFormat::Json, ReportFormat::Markdown] {
+            write_report(&report, Some(Path::new("/dev/null")), false, format)
+                .expect("a device cannot be renamed over, so it is written in place");
+        }
+        // Regular files are still replaced atomically and completely.
+        let output = directory.path().join("report.json");
+        std::fs::write(&output, "stale contents that are longer than nothing").unwrap();
+        write_report(&report, Some(&output), false, ReportFormat::Json).unwrap();
+        let written: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&output).unwrap()).unwrap();
+        assert_eq!(written["schema_version"], REPORT_SCHEMA_VERSION);
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn damaged_archive_yields_a_partial_report_instead_of_an_error() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("damaged.zip");
+        std::fs::write(&path, b"PK\x03\x04 this is not a complete archive").unwrap();
+        let report = inspect(&arguments(path), &CancellationToken::default())
+            .expect("a damaged container is still inspected as a file");
+        assert!(report.run.partial);
+        assert!(
+            report
+                .run
+                .errors
+                .iter()
+                .any(|error| error.stage == "discovery")
+        );
+        assert_eq!(report.files.len(), 1);
     }
 }
