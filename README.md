@@ -73,6 +73,7 @@ Drag a file, folder, application, package, or workspace into the window — or u
 
 - **Artifact Tree** groups executables, frameworks, libraries, plug-ins, resources, and metadata logically rather than by path. Archive and package members appear as a virtual tree without extraction.
 - **Inspector tabs** cover Overview, Headers, Slices, Sections, Segments, Imports, Exports, Symbols, Relocations, Dependencies, Dependency Graph, Strings, Hex, Entropy, Size Lab, Signature, Metadata, and Findings. IPA, APK, MSIX, and DEB packages add their own summary, component, signing, privacy, and findings tabs.
+- **Tables** size their columns to the content. Click any row to read every value in full and copy it; when a table is wider than the panel it scrolls sideways, and **More columns →** jumps to the columns past the edge.
 - **Search** (`⌘F`) spans names, metadata, symbols, and strings across the whole artifact, and accepts hexadecimal byte queries.
 - **File → Compare Artifacts** (`⇧⌘C`) diffs two artifacts by exact content identity: added, removed, modified, and moved files, size growth by directory and type, duplicates, and IPA privacy, signing, and entitlement changes.
 - **Release Policy** (`⌥⌘P`) applies the same versioned policy file the CLI uses and lists violations in the Policy tab.
@@ -273,7 +274,7 @@ sh scripts/verify.sh
 
 CI runs the workspace tests and Clippy on stable Rust, checks the Rust 1.88 minimum, and builds and launches the macOS app. A pinned corpus of 16 real artifacts (IPA, APK, MSIX, signed and deliberately corrupted macOS apps, PKG, DMG, ISO, PE, ELF, DEB, RPM) backs the synthetic fixtures; it is never executed or installed. See the [testing matrix](docs/testing.md) and [corpus provenance](tests/real-world-corpus/README.md).
 
-Every distributed macOS build must be Developer ID signed, notarized, stapled, and pass `codesign`, `stapler`, and Gatekeeper validation. Release archives are produced only with `scripts/release-macos.sh`, and credentials are read from the environment — never printed, embedded, or committed. Pushing a `v*` tag builds the Windows and Linux packages and publishes them to GitHub Releases; the **Package Windows and Linux** workflow can also be run manually without publishing.
+Every distributed macOS build must be Developer ID signed, notarized, stapled, and pass `codesign`, `stapler`, and Gatekeeper validation. Release archives are produced only with `scripts/release-macos.sh`, and credentials are read from the environment — never printed, embedded, or committed. Pushing a `v*` tag builds the Windows and Linux packages and publishes them to GitHub Releases, using the notes written in `docs/releases/<version>.md`; the **Package Windows and Linux** workflow can also be run manually without publishing.
 
 ## Documentation
 

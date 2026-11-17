@@ -10,7 +10,7 @@ use gpui_component::{
     menu::{DropdownMenu as _, PopupMenuItem},
     progress::Progress,
     resizable::{h_resizable, resizable_panel},
-    scroll::ScrollableElement,
+    scroll::{ScrollableElement, Scrollbar, ScrollbarShow},
     tab::{Tab, TabBar},
 };
 use hexlora::file_search::{FileSearchMode, parse_search_bytes};
@@ -309,6 +309,10 @@ impl InspectorTab {
     }
 }
 
+const DEFAULT_STRING_MINIMUM: usize = 4;
+/// Most strings kept for one file. Extraction stops here, in file order.
+const STRING_LIMIT: usize = 250_000;
+
 struct HexloraApp {
     focus_handle: FocusHandle,
     artifact: Option<Arc<ArtifactNode>>,
@@ -329,6 +333,8 @@ struct HexloraApp {
     signature_loaded: bool,
     strings: Arc<Vec<ExtractedString>>,
     strings_loaded: bool,
+    /// Shortest string length the loaded `strings` were extracted with.
+    strings_extracted_minimum: usize,
     string_minimum: usize,
     string_filter: std::cell::RefCell<Option<StringFilter>>,
     search_hits: Arc<Vec<SearchHit>>,
@@ -365,6 +371,22 @@ struct HexloraApp {
     high_contrast: bool,
     sidebar_width: f32,
     inspector_width: f32,
+    row_selection: Option<Arc<RowSelection>>,
+}
+
+/// The table row whose full, untruncated values are shown beneath its table.
+#[derive(Debug, PartialEq)]
+struct RowSelection {
+    table: &'static str,
+    index: usize,
+    values: Vec<String>,
+}
+
+thread_local! {
+    /// The row selection of the window being rendered. Tables are built by free functions
+    /// that cannot borrow the view while it renders, so `render` publishes it here first.
+    static RENDERED_ROW_SELECTION: std::cell::RefCell<Option<Arc<RowSelection>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 impl HexloraApp {
@@ -411,7 +433,8 @@ impl HexloraApp {
             signature_loaded: false,
             strings: Arc::default(),
             strings_loaded: false,
-            string_minimum: 4,
+            strings_extracted_minimum: DEFAULT_STRING_MINIMUM,
+            string_minimum: DEFAULT_STRING_MINIMUM,
             string_filter: std::cell::RefCell::new(None),
             search_hits: Arc::default(),
             dependency_graph: Arc::default(),
@@ -435,6 +458,7 @@ impl HexloraApp {
             tools: Arc::new(ToolRegistry::standard()),
             tool_output: None,
             tab: InspectorTab::Overview,
+            row_selection: None,
             tab_scroll: ScrollHandle::new(),
             tab_scroll_synced: std::cell::Cell::new(None),
             loading: false,
@@ -689,9 +713,12 @@ impl HexloraApp {
             let result = cx
                 .background_spawn(async move {
                     let root = open_artifact(&path, &cancellation)?;
+                    // The shallowest Info.plist describes the artifact itself; deeper ones
+                    // belong to embedded frameworks and resource bundles.
                     let metadata = root
                         .files()
-                        .find(|node| node.name.eq_ignore_ascii_case("Info.plist"))
+                        .filter(|node| node.name.eq_ignore_ascii_case("Info.plist"))
+                        .min_by_key(|node| node.path.components().count())
                         .map(inspect_metadata)
                         .transpose()?
                         .unwrap_or_default();
@@ -855,6 +882,7 @@ impl HexloraApp {
         self.entropy_loaded = false;
         self.hex_offset = 0;
         self.hex_selection = None;
+        self.row_selection = None;
         self.tab = InspectorTab::Overview;
         let node = self.artifact.as_ref().and_then(|r| r.find(id)).cloned();
         let artifact = self.artifact.clone();
@@ -932,6 +960,7 @@ impl HexloraApp {
     }
     fn set_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
         self.tab = tab;
+        self.row_selection = None;
         if tab == InspectorTab::Strings && !self.strings_loaded {
             self.load_strings(cx);
         } else if tab == InspectorTab::Entropy && !self.entropy_loaded {
@@ -1064,14 +1093,21 @@ impl HexloraApp {
         let generation = self.task_generation;
         let cancellation = self.cancellation.clone();
         let analysis = self.analysis.clone();
+        // Extracting shorter strings than will be shown fills the limit with two- and
+        // three-byte noise and drops the real strings later in the file.
+        let minimum = self.string_minimum.min(DEFAULT_STRING_MINIMUM);
         self.loading = true;
         self.status = format!("Extracting strings from {}…", node.name).into();
         cx.notify();
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
-                    let mut strings =
-                        extract_strings_node_cancellable(&node, 2, 100_000, &cancellation)?;
+                    let mut strings = extract_strings_node_cancellable(
+                        &node,
+                        minimum,
+                        STRING_LIMIT,
+                        &cancellation,
+                    )?;
                     if let Some(analysis) = analysis.as_deref() {
                         if analysis.slice_analyses.is_empty() {
                             annotate_string_locations(&mut strings, analysis);
@@ -1094,7 +1130,13 @@ impl HexloraApp {
                         let count = strings.len();
                         this.strings = Arc::new(strings);
                         this.strings_loaded = true;
-                        this.status = format!("{count} strings extracted").into();
+                        this.strings_extracted_minimum = minimum;
+                        this.status = if count >= STRING_LIMIT {
+                            format!("First {count} strings extracted; the file has more")
+                        } else {
+                            format!("{count} strings extracted")
+                        }
+                        .into();
                     }
                     Err(error) => {
                         this.error = Some(error.to_string().into());
@@ -1603,6 +1645,9 @@ impl HexloraApp {
         } else {
             self.query.to_lowercase()
         };
+        // A filtered tree lists matches without their parents, so nesting depth would only
+        // push the names off the right edge.
+        let indent = if query.is_empty() { 16. } else { 0. };
         let rows = Arc::new(
             self.artifact
                 .as_ref()
@@ -1660,7 +1705,7 @@ impl HexloraApp {
                                     .w_full()
                                     .flex()
                                     .items_center()
-                                    .pl(px(12. + depth as f32 * 16.))
+                                    .pl(px(12. + depth as f32 * indent))
                                     .pr_2()
                                     .gap_2()
                                     .cursor_pointer()
@@ -1678,13 +1723,15 @@ impl HexloraApp {
                                             },
                                         ),
                                     )
-                                    .child(
-                                        div()
-                                            .w(px(14.))
-                                            .flex_none()
-                                            .text_color(rgb(if active { GREEN } else { MUTED }))
-                                            .child(kind_icon(kind)),
-                                    )
+                                    .when(!kind_icon(kind).is_empty(), |row| {
+                                        row.child(
+                                            div()
+                                                .w(px(14.))
+                                                .flex_none()
+                                                .text_color(rgb(if active { GREEN } else { MUTED }))
+                                                .child(kind_icon(kind)),
+                                        )
+                                    })
                                     .child(
                                         div()
                                             .text_sm()
@@ -1778,14 +1825,28 @@ impl HexloraApp {
                             .map(|format| format!("{format:?}"))
                             .unwrap_or_else(|| "Container".into()),
                     ),
-                    ("Size".into(), format_size(node.size)),
+                    (
+                        "Size".into(),
+                        // A folder has no size of its own; show what it contains.
+                        if node.size == 0 && !node.children.is_empty() {
+                            format_size(node.files().map(|file| file.size).sum())
+                        } else {
+                            format_size(node.size)
+                        },
+                    ),
                     ("Path".into(), node.path.display().to_string()),
                 ];
-                values.extend(
-                    node.properties
-                        .iter()
-                        .map(|(key, value)| (key.clone(), value.clone())),
-                );
+                values.extend(node.properties.iter().map(|(key, value)| {
+                    let readable = matches!(
+                        key.as_str(),
+                        "Declared Expanded Size" | "Compressed Size" | "Uncompressed Size"
+                    )
+                    .then(|| value.parse::<u64>().ok())
+                    .flatten()
+                    .filter(|bytes| *bytes >= 1024)
+                    .map(|bytes| format!("{} ({bytes} bytes)", format_size(bytes)));
+                    (key.clone(), readable.unwrap_or_else(|| value.clone()))
+                }));
                 if !self.metadata.is_empty() {
                     values.push(("Metadata fields".into(), self.metadata.len().to_string()));
                     for key in [
@@ -1822,7 +1883,11 @@ impl HexloraApp {
             })
             .unwrap_or_default();
         div()
-            .id("details-scroll")
+            // One scroll position per node: a new selection starts at the top.
+            .id(SharedString::from(format!(
+                "details-scroll-{}",
+                self.selected.map(|id| id.to_string()).unwrap_or_default()
+            )))
             .w_full()
             .h_full()
             .bg(rgb(PANEL))
@@ -2646,8 +2711,9 @@ impl HexloraApp {
                 div()
                     // One scroll position per tab: switching tabs must not land mid-page.
                     .id(SharedString::from(format!(
-                        "inspector-scroll-{}",
-                        self.tab.label()
+                        "inspector-scroll-{}-{}",
+                        self.tab.label(),
+                        self.selected.map(|id| id.to_string()).unwrap_or_default()
                     )))
                     .flex_1()
                     .min_h_0()
@@ -2853,6 +2919,12 @@ impl HexloraApp {
     fn render_search(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let hits = Arc::new(self.search_hits.clone());
         let hit_count = hits.len();
+        // Paths are shown relative to the opened artifact: the part every hit shares only
+        // pushes the part that tells them apart out of view.
+        let base = self
+            .artifact
+            .as_ref()
+            .and_then(|root| root.path.parent().map(std::path::Path::to_path_buf));
         div()
             .flex_1()
             .flex()
@@ -2881,9 +2953,11 @@ impl HexloraApp {
                                     .filter_map(|index| hits.get(index).map(|hit| (index, hit)))
                                     .map(|(index, hit)| {
                                         let node_id = hit.node_id;
+                                        let location = search_hit_location(hit, base.as_deref());
                                         div()
                                             .id(SharedString::from(format!("search-hit-{index}")))
                                             .h(px(48.))
+                                            .w_full()
                                             .flex()
                                             .items_center()
                                             .border_b_1()
@@ -2922,11 +2996,7 @@ impl HexloraApp {
                                                             .text_ellipsis()
                                                             .line_clamp(1)
                                                             .text_color(rgb(MUTED))
-                                                            .child(format!(
-                                                                "{}  {}",
-                                                                hit.path.display(),
-                                                                hit.detail
-                                                            )),
+                                                            .child(location),
                                                     ),
                                             )
                                     })
@@ -3041,6 +3111,9 @@ impl HexloraApp {
                             .disabled(self.string_minimum <= 2)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.string_minimum = this.string_minimum.saturating_sub(1).max(2);
+                                if this.string_minimum < this.strings_extracted_minimum {
+                                    this.load_strings(cx);
+                                }
                                 cx.notify();
                             })),
                     )
@@ -3054,6 +3127,11 @@ impl HexloraApp {
                             })),
                     ),
             )
+            .when(self.strings.len() >= STRING_LIMIT, |panel| {
+                panel.child(div().text_xs().text_color(rgb(WARNING)).child(format!(
+                    "Only the first {STRING_LIMIT} strings of this file are listed. Raise the minimum length to reach strings further into the file."
+                )))
+            })
             .child(lazy_table_panel(
                 "Extracted Strings",
                 &[
@@ -3141,8 +3219,6 @@ impl HexloraApp {
                     .text_xs()
                     .text_color(rgb(TEXT))
                     .overflow_hidden()
-                    .text_ellipsis()
-                    .line_clamp(1)
                     .cursor_pointer()
                     .hover(|style| style.bg(rgb(SELECTION)))
                     .when_some(node.id, |card, id| {
@@ -3150,7 +3226,16 @@ impl HexloraApp {
                             cx.listener(move |this, _, _, cx| this.activate_tree_node(id, cx)),
                         )
                     })
-                    .child(node.label)
+                    // The label needs a box as wide as the card: laid out as a bare flex item
+                    // it was shortened even when it had room ("Tapa" became "Ta…").
+                    .child(
+                        div()
+                            .w_full()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .line_clamp(1)
+                            .child(node.label),
+                    )
             })
             .collect::<Vec<_>>();
         div()
@@ -3299,7 +3384,7 @@ impl HexloraApp {
                 );
                 values
             })
-            .unwrap_or_else(|| vec![("Status".into(), "No host signature result".into())]);
+            .unwrap_or_else(|| vec![("Status".into(), "Not verified yet".into())]);
         let identity = values
             .iter()
             .any(|(key, value)| key == "Signer" && !value.is_empty());
@@ -4344,7 +4429,8 @@ impl HexloraApp {
                             .gap_2()
                             .child(
                                 div()
-                                    .w(px(220.))
+                                    .w(px(300.))
+                                    .flex_none()
                                     .overflow_hidden()
                                     .text_ellipsis()
                                     .line_clamp(1)
@@ -4409,7 +4495,7 @@ impl HexloraApp {
                             .text_xs()
                             .font_semibold()
                             .text_color(rgb(MUTED))
-                            .child(div().w(px(220.)).child("TARGET"))
+                            .child(div().w(px(300.)).flex_none().child("TARGET"))
                             .children(architectures.into_iter().map(|architecture| {
                                 div().w(px(88.)).text_center().child(architecture)
                             }))
@@ -5294,6 +5380,9 @@ fn push_json_section<T: Serialize>(
 
 impl Render for HexloraApp {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        RENDERED_ROW_SELECTION.with(|selection| {
+            *selection.borrow_mut() = self.row_selection.clone();
+        });
         let workspace_background = if self.high_contrast { 0x000000 } else { BG };
         let workspace_text = if self.high_contrast { 0xffffff } else { TEXT };
         let report_menu_view = cx.entity();
@@ -5503,6 +5592,44 @@ impl Render for HexloraApp {
                         ),
                 ),
             )
+            // Errors get their own strip so the whole message can be read: squeezed into the
+            // one-line status bar, anything past the window edge was lost.
+            .when_some(self.error.clone(), |workspace, error| {
+                workspace.child(
+                    div()
+                        .flex_none()
+                        .flex()
+                        .items_start()
+                        .gap_3()
+                        .px_3()
+                        .py_1p5()
+                        .bg(rgb(PANEL_2))
+                        .border_t_1()
+                        .border_color(rgb(DESTRUCTIVE))
+                        .child(
+                            div()
+                                .id("error-message")
+                                .flex_1()
+                                .min_w_0()
+                                .max_h(px(88.))
+                                .overflow_y_scroll()
+                                .text_xs()
+                                .text_color(rgb(DESTRUCTIVE))
+                                .child(error),
+                        )
+                        .child(
+                            Button::new("dismiss-error")
+                                .label("Dismiss")
+                                .xsmall()
+                                .compact()
+                                .ghost()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.error = None;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+            })
             .child(
                 div()
                     .h(px(28.))
@@ -5533,19 +5660,7 @@ impl Render for HexloraApp {
                             .text_ellipsis()
                             .line_clamp(1)
                             .child(self.status.clone()),
-                    )
-                    .when_some(self.error.clone(), |d, e| {
-                        d.child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .line_clamp(1)
-                                .text_color(rgb(DESTRUCTIVE))
-                                .child(e),
-                        )
-                    }),
+                    ),
             )
     }
 }
@@ -5599,11 +5714,53 @@ fn find_archive_member_with_ancestors(
     }
     None
 }
+/// Second line of a search result. The file name and what matched come first, because
+/// the line is cut at the right edge and the containing folder is the least telling part.
+fn search_hit_location(hit: &SearchHit, base: Option<&std::path::Path>) -> String {
+    let relative = base
+        .and_then(|base| hit.path.strip_prefix(base).ok())
+        .unwrap_or(&hit.path);
+    let name = relative
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| relative.display().to_string());
+    let folder = relative
+        .parent()
+        .map(|parent| parent.display().to_string())
+        .unwrap_or_default();
+    let mut location = name;
+    let detail = hit.detail.trim();
+    if !detail.is_empty() {
+        location.push_str("  ·  ");
+        location.push_str(&keep_tail(detail, 56));
+    }
+    if !folder.is_empty() {
+        location.push_str("  —  ");
+        location.push_str(&folder);
+    }
+    location
+}
+
+/// Shorten `value` to `max_chars` by dropping its beginning. Paths and dotted keys carry
+/// their distinguishing part at the end.
+fn keep_tail(value: &str, max_chars: usize) -> String {
+    let total = value.chars().count();
+    if total <= max_chars {
+        return value.to_string();
+    }
+    let tail = value
+        .chars()
+        .skip(total - max_chars.saturating_sub(1))
+        .collect::<String>();
+    format!("…{tail}")
+}
+
 fn kind_icon(kind: ArtifactKind) -> &'static str {
     match kind {
-        ArtifactKind::Group => "▾",
+        // Containers are marked by their disclosure triangle alone: a second triangle
+        // beside it read as a duplicate, and a square read as a checkbox.
+        ArtifactKind::Group | ArtifactKind::Directory | ArtifactKind::Bundle => "",
         ArtifactKind::Application => "◆",
-        ArtifactKind::Directory | ArtifactKind::Bundle => "▸",
         ArtifactKind::Executable => "▶",
         ArtifactKind::DynamicLibrary | ArtifactKind::StaticLibrary | ArtifactKind::Framework => "⬡",
         ArtifactKind::Metadata => "≡",
@@ -5722,7 +5879,7 @@ fn lazy_table_panel(
     row_at: impl Fn(usize) -> Vec<String> + 'static,
     cx: &mut Context<HexloraApp>,
 ) -> AnyElement {
-    const MAX_RENDERED_ROWS: usize = 20_000;
+    const MAX_RENDERED_ROWS: usize = 250_000;
     const ROW_HEIGHT: f32 = 32.;
     const HEADER_HEIGHT: f32 = 34.;
     // Tables up to INLINE_ROWS are laid out at their full height, so the page scrolls as one
@@ -5741,45 +5898,73 @@ fn lazy_table_panel(
     let list_min_height = list_min_rows as f32 * ROW_HEIGHT;
     let fills_page = visible_count > INLINE_ROWS;
 
-    // Size columns from their content so long paths and names get the room instead of every
-    // column being the same width.
-    let mut weights = headers
+    // Size columns from the measured width of their content, so long paths and names get the
+    // room instead of every column being the same width.
+    let mut widths = headers
         .iter()
-        .map(|header| header.chars().count() as f32 + 2.)
+        .map(|header| estimated_text_width(header) + 14.)
         .collect::<Vec<_>>();
+    // Addresses and offsets are unreadable once shortened, so those columns keep their full
+    // width; names and paths may give way first.
+    let mut numeric = vec![false; headers.len()];
     for index in 0..visible_count.min(64) {
-        for (weight, value) in weights.iter_mut().zip(row_at(index)) {
-            *weight = weight.max(value.chars().count() as f32);
+        for ((width, numeric), value) in widths.iter_mut().zip(&mut numeric).zip(row_at(index)) {
+            // The estimate is approximate; a few spare pixels keep short values whole.
+            *width = width.max(estimated_text_width(&value) + 8.);
+            *numeric |= value.starts_with("0x") && !value.contains(' ');
         }
     }
-    let weights: Arc<[f32]> = weights
-        .into_iter()
-        .map(|weight| weight.clamp(8., 56.))
-        .collect();
-    // Each column starts at its natural text width and shares leftover space by weight, so
+    // Each column starts at its natural width and shares leftover space in proportion, so
     // short columns stay readable while long ones absorb the slack. A column-direction flex
     // box keeps the text child width-constrained, which is what lets it end in an ellipsis.
-    // Columns never shrink below 18 characters of their content (enough for a full 64-bit
-    // address); when the panel is narrower than that the table scrolls sideways instead of
-    // clipping its right-hand columns.
-    let column_width = |chars: f32| chars * 7.2 + 16.;
+    // Address columns never shrink (a 64-bit address fits in ADDRESS_WIDTH) and text columns
+    // never shrink below TEXT_MIN_WIDTH; when the panel is narrower than that the table
+    // scrolls sideways instead of clipping its right-hand columns. Whatever still gets
+    // shortened can be read in full by clicking the row.
+    const CELL_PADDING: f32 = 16.;
+    const ADDRESS_WIDTH: f32 = 156.;
+    const TEXT_MIN_WIDTH: f32 = 96.;
+    // (natural width, narrowest width) per column.
+    let weights: Arc<[(f32, f32)]> = widths
+        .into_iter()
+        .zip(numeric)
+        .map(|(width, numeric)| {
+            let width = width.clamp(48., 440.);
+            let narrowest = if numeric {
+                ADDRESS_WIDTH
+            } else {
+                TEXT_MIN_WIDTH
+            };
+            (width, width.min(narrowest))
+        })
+        .collect();
     let table_min_width = weights
         .iter()
-        .map(|weight| column_width(weight.min(18.)))
+        .map(|(_, narrowest)| narrowest + CELL_PADDING)
         .sum::<f32>();
-    let cell = move |weight: f32| {
+    let cell = move |(width, narrowest): (f32, f32)| {
         let mut cell = div()
-            .flex_basis(px(column_width(weight)))
-            .min_w(px(column_width(weight.min(18.))))
+            .flex_basis(px(width + CELL_PADDING))
+            .min_w(px(narrowest + CELL_PADDING))
             .h_full()
             .px_2()
             .flex()
             .flex_col()
             .justify_center();
-        cell.style().flex_grow = Some(weight);
-        cell.style().flex_shrink = Some(1.);
+        cell.style().flex_grow = Some(width);
+        // Give up width in proportion to the slack each column has, so a wide path column
+        // absorbs a shortage before a short name column loses anything.
+        cell.style().flex_shrink = Some((width - narrowest) / (width + CELL_PADDING));
         cell
     };
+    let selection = RENDERED_ROW_SELECTION
+        .with(|selection| selection.borrow().clone())
+        .filter(|selection| selection.table == title);
+    let row_at = std::rc::Rc::new(row_at);
+    let selection = selection.filter(|selection| {
+        selection.index < visible_count && row_at(selection.index) == selection.values
+    });
+    let selected_index = selection.as_ref().map(|selection| selection.index);
     let row_weights = weights.clone();
 
     div()
@@ -5787,43 +5972,18 @@ fn lazy_table_panel(
         .flex()
         .flex_col()
         .gap_3()
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(panel_title(title))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(MUTED))
-                        .child(format!("{total} rows")),
-                ),
-        )
-        .when(truncated, |panel| {
-            panel.child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(WARNING))
-                    .child(format!(
-                        "Showing the first {MAX_RENDERED_ROWS} of {total} rows; use search to narrow the result."
-                    )),
-            )
-        })
-        .child(
-            div()
-                .id(SharedString::from(format!("table-scroll-{title}")))
-                .when(fills_page, |table| table.flex_1())
-                .min_h(px(HEADER_HEIGHT + list_min_height))
-                .flex()
-                .flex_col()
-                .rounded_md()
-                .border_1()
-                .border_color(rgb(BORDER))
-                .bg(rgb(PANEL))
-                .overflow_x_scroll().map(horizontal_scroll_only)
-                .child(
-                    div()
+        .child(TableScroll {
+            id: SharedString::from(format!("table-scroll-{title}")),
+            title,
+            total,
+            notice: truncated.then(|| {
+                format!(
+                    "Showing the first {MAX_RENDERED_ROWS} of {total} rows; use search to narrow the result."
+                )
+            }),
+            fills_page,
+            min_height: HEADER_HEIGHT + list_min_height,
+            content: div()
                         .flex_1()
                         .min_w(px(table_min_width))
                         .min_h(px(HEADER_HEIGHT + list_min_height))
@@ -5860,17 +6020,35 @@ fn lazy_table_panel(
                         uniform_list(
                             SharedString::from(format!("table-{title}")),
                             visible_count,
-                            cx.processor(move |_this, range: std::ops::Range<usize>, _, _| {
+                            cx.processor(move |_this, range: std::ops::Range<usize>, _, cx| {
                                 range
                                     .map(|index| {
                                         let row = row_at(index);
+                                        let clicked = row.clone();
                                         div()
+                                            .id(SharedString::from(format!("{title}-row-{index}")))
                                             .h(px(ROW_HEIGHT))
                                             .w_full()
                                             .flex()
                                             .border_t_1()
                                             .border_color(rgb(BORDER))
+                                            .cursor_pointer()
+                                            .when(selected_index == Some(index), |row| {
+                                                row.bg(rgb(SELECTION))
+                                            })
                                             .hover(|row| row.bg(rgb(PANEL_2)))
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                let clicked = RowSelection {
+                                                    table: title,
+                                                    index,
+                                                    values: clicked.clone(),
+                                                };
+                                                // A second click on the same row closes it.
+                                                this.row_selection = (this.row_selection.as_deref()
+                                                    != Some(&clicked))
+                                                .then(|| Arc::new(clicked));
+                                                cx.notify();
+                                            }))
                                             .children(row.into_iter().zip(row_weights.iter()).map(
                                                 |(value, weight)| {
                                                     cell(*weight)
@@ -5892,10 +6070,266 @@ fn lazy_table_panel(
                         .flex_1()
                         .min_h(px(list_min_height)),
                     )
-                }),
+                })
+                .into_any_element(),
+        })
+        .when_some(selection, |panel, selection| {
+            panel.child(row_detail_panel(headers, selection, cx))
+        })
+        .into_any_element()
+}
+
+/// A table's heading and frame. When the columns need more width than the panel has, the
+/// table scrolls sideways and a scrollbar stays visible along its bottom edge, so columns
+/// beyond the right edge are never hidden without a sign that they are there.
+#[derive(IntoElement)]
+struct TableScroll {
+    id: SharedString,
+    title: &'static str,
+    total: usize,
+    notice: Option<String>,
+    fills_page: bool,
+    min_height: f32,
+    content: AnyElement,
+}
+
+impl RenderOnce for TableScroll {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        // The scrollbar gets a strip of its own, or it would cover the last row.
+        const SCROLLBAR_STRIP: f32 = 14.;
+        let scroll_handle = window
+            .use_keyed_state(self.id.clone(), cx, |_, _| ScrollHandle::default())
+            .read(cx)
+            .clone();
+        // Both values come from the previous frame's layout; a table that has not been laid
+        // out yet asks for one more frame so the hint below is right from the start.
+        if scroll_handle.bounds().size.width == px(0.) {
+            window.request_animation_frame();
+        }
+        let hidden_width = scroll_handle.max_offset().width;
+        let at_end = scroll_handle.offset().x <= -hidden_width + px(1.);
+        let jump_handle = scroll_handle.clone();
+        div()
+            .when(self.fills_page, |panel| panel.flex_1())
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(panel_title(self.title))
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_xs()
+                            .text_color(rgb(MUTED))
+                            .child(format!("{} rows", self.total)),
+                    )
+                    // A tall table has its scrollbar far below the fold, so the heading also
+                    // says when columns continue past the edge and jumps to them on click.
+                    .when(hidden_width > px(1.), |heading| {
+                        heading.child(
+                            div()
+                                .id(SharedString::from(format!("{}-more-columns", self.id)))
+                                .h(px(22.))
+                                .px_2()
+                                .flex()
+                                .flex_none()
+                                .items_center()
+                                .rounded_sm()
+                                .border_1()
+                                .border_color(rgb(BORDER))
+                                .bg(rgb(SELECTION))
+                                .text_xs()
+                                .text_color(rgb(TEXT))
+                                .cursor_pointer()
+                                .on_click(move |_, window, _| {
+                                    let mut offset = jump_handle.offset();
+                                    offset.x = if at_end { px(0.) } else { -hidden_width };
+                                    jump_handle.set_offset(offset);
+                                    window.refresh();
+                                })
+                                .child(if at_end {
+                                    "← First columns"
+                                } else {
+                                    "More columns →"
+                                }),
+                        )
+                    }),
+            )
+            .when_some(self.notice, |panel, notice| {
+                panel.child(div().text_xs().text_color(rgb(WARNING)).child(notice))
+            })
+            .child(
+                div()
+                    .relative()
+                    .when(self.fills_page, |table| table.flex_1())
+                    .min_h(px(self.min_height + SCROLLBAR_STRIP))
+                    .flex()
+                    .flex_col()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(BORDER))
+                    .bg(rgb(PANEL))
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .id(self.id.clone())
+                            .flex_1()
+                            .min_h(px(self.min_height))
+                            .flex()
+                            .flex_col()
+                            .track_scroll(&scroll_handle)
+                            .overflow_x_scroll()
+                            .map(horizontal_scroll_only)
+                            .child(self.content),
+                    )
+                    .child(div().h(px(SCROLLBAR_STRIP)).flex_none())
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .right_0()
+                            .bottom_0()
+                            .child(
+                                Scrollbar::horizontal(&scroll_handle)
+                                    .scrollbar_show(ScrollbarShow::Always),
+                            ),
+                    ),
+            )
+    }
+}
+
+/// Rough rendered width of `text` at the table font size. The interface font is
+/// proportional, and a table full of hexadecimal addresses is far wider per character than
+/// one of lowercase names, so counting characters alone clips addresses.
+fn estimated_text_width(text: &str) -> f32 {
+    text.chars()
+        .take(160)
+        .map(|character| match character {
+            '0'..='9' | 'A'..='Z' | '_' | '@' | '#' | '%' | '&' => 8.2,
+            'm' | 'w' => 10.2,
+            'i' | 'j' | 'l' | 't' | 'f' | 'r' | '.' | ',' | ':' | ';' | '\'' | '|' | '!' => 4.2,
+            ' ' | '/' | '(' | ')' | '[' | ']' | '-' => 4.6,
+            character if character.is_ascii() => 7.,
+            _ => 12.5,
+        })
+        .sum()
+}
+
+/// The selected table row with nothing shortened: every column on its own line, wrapped.
+fn row_detail_panel(
+    headers: &'static [&'static str],
+    selection: Arc<RowSelection>,
+    cx: &mut Context<HexloraApp>,
+) -> impl IntoElement {
+    const MAX_SHOWN_CHARS: usize = 4_000;
+    let copy_text = headers
+        .iter()
+        .zip(&selection.values)
+        .map(|(header, value)| format!("{header}: {value}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    div()
+        .flex_none()
+        .flex()
+        .flex_col()
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(BORDER))
+        .bg(rgb(PANEL))
+        .child(
+            div()
+                .h(px(34.))
+                .flex_none()
+                .px_3()
+                .flex()
+                .items_center()
+                .gap_2()
+                .bg(rgb(PANEL_2))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_xs()
+                        .font_semibold()
+                        .text_color(rgb(MUTED))
+                        .child(format!("Row {} · full values", selection.index + 1)),
+                )
+                .child(
+                    Button::new("row-detail-copy")
+                        .label("Copy Row")
+                        .xsmall()
+                        .compact()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
+                            this.status = "Row copied to the clipboard".into();
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    Button::new("row-detail-close")
+                        .label("Close")
+                        .xsmall()
+                        .compact()
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.row_selection = None;
+                            cx.notify();
+                        })),
                 ),
         )
-        .into_any_element()
+        .child(
+            div()
+                .id("row-detail-values")
+                .max_h(px(176.))
+                .overflow_y_scroll()
+                .py_1()
+                .children(
+                    headers
+                        .iter()
+                        .zip(&selection.values)
+                        .map(|(header, value)| {
+                            let mut shown = value.chars().take(MAX_SHOWN_CHARS).collect::<String>();
+                            let total = value.chars().count();
+                            if total > MAX_SHOWN_CHARS {
+                                shown.push_str(&format!(
+                                    "… ({} more characters; Copy Row copies all of it)",
+                                    total - MAX_SHOWN_CHARS
+                                ));
+                            }
+                            div()
+                                .w_full()
+                                .px_3()
+                                .py_1()
+                                .flex()
+                                .items_start()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .w(px(128.))
+                                        .flex_none()
+                                        .text_xs()
+                                        .text_color(rgb(MUTED))
+                                        .child(*header),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_xs()
+                                        .text_color(rgb(TEXT))
+                                        .child(if shown.is_empty() {
+                                            "—".to_string()
+                                        } else {
+                                            shown
+                                        }),
+                                )
+                        }),
+                ),
+        )
 }
 
 /// Compact key/value list for the narrow details panel: the key sits above its value so long
@@ -6147,7 +6581,8 @@ fn dependency_visual_layout(
                 .unwrap_or_else(|| edge.requested.clone());
             nodes.push(DependencyVisualNode {
                 id: target_id,
-                label: truncate_chart_label(&label, 32),
+                // A library is told apart by the end of its path, not by /System/Library/….
+                label: keep_tail(&label, 29),
                 x: 470.,
                 y: 0.,
                 width: 280.,
@@ -6183,6 +6618,9 @@ fn metric_card(
     detail: impl Into<SharedString>,
     color: u32,
 ) -> impl IntoElement {
+    let value: SharedString = value.into();
+    // Figures are set large; a sentence at that size would wrap over several lines.
+    let large = value.chars().count() <= 12;
     div()
         .min_w(px(154.))
         .flex_1()
@@ -6201,10 +6639,16 @@ fn metric_card(
         .child(
             div()
                 .mt_2()
-                .text_2xl()
+                .map(|text| {
+                    if large {
+                        text.text_2xl()
+                    } else {
+                        text.text_base()
+                    }
+                })
                 .font_semibold()
                 .text_color(rgb(TEXT))
-                .child(value.into()),
+                .child(value),
         )
         .child(
             div()
@@ -6269,7 +6713,8 @@ fn artifact_top_files(root: &ArtifactNode, limit: usize) -> Vec<ChartDatum> {
             let duplicates = seen_labels.entry(label.clone()).or_insert(0usize);
             *duplicates += 1;
             if *duplicates > 1 {
-                label = format!("{label} ({duplicates})");
+                // Keep the numbered label as short as the others so neighbours never touch.
+                label = format!("{} ({duplicates})", truncate_chart_label(&name, 5));
             }
             ChartDatum {
                 label,
@@ -6537,11 +6982,12 @@ fn donut_chart_card(title: &'static str, data: Vec<ChartDatum>) -> impl IntoElem
                 .items_center()
                 .gap_4()
                 .child(
-                    div().w(px(190.)).h(px(190.)).flex_none().child(
+                    // Kept compact so the legend beside it has room for full category names.
+                    div().w(px(156.)).h(px(156.)).flex_none().child(
                         PieChart::new(chart_data)
                             .value(|datum| datum.value as f32)
-                            .inner_radius(56.)
-                            .outer_radius(84.)
+                            .inner_radius(46.)
+                            .outer_radius(70.)
                             .pad_angle(0.018)
                             .color(|datum| rgb(datum.color)),
                     ),

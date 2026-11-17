@@ -1499,7 +1499,8 @@ fn analyze_macho_binary(m: &goblin::mach::MachO<'_>) -> Result<BinaryAnalysis> {
             });
         }
     }
-    for lib in &m.libs {
+    // The first entry stands for the image itself, not for a library it links.
+    for lib in m.libs.iter().filter(|lib| **lib != "self") {
         a.dependencies.push(Dependency {
             name: (*lib).into(),
             path: None,
