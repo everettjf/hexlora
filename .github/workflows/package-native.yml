@@ -73,6 +73,7 @@ jobs:
     needs: [windows, linux]
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           pattern: hexlora-*
@@ -81,7 +82,17 @@ jobs:
       - name: Create checksums
         working-directory: release-assets
         run: sha256sum * > SHA256SUMS
+      - name: Compose release notes
+        id: notes
+        run: |
+          if sh scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"; then
+            echo "path=$RUNNER_TEMP/release-notes.md" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No written notes in docs/releases for $GITHUB_REF_NAME; publishing generated notes only."
+          fi
+      # Written notes come first; the generated changelog link is appended.
       - uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*
+          body_path: ${{ steps.notes.outputs.path }}
           generate_release_notes: true

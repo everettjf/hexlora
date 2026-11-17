@@ -7,3 +7,7 @@
 - Always create macOS release artifacts with `scripts/release-macos.sh`; do not publish output from `scripts/build-macos-app.sh` directly.
 - Never commit, print, or embed Apple IDs, app-specific passwords, signing certificates, or other release credentials. Read credentials from the environment only.
 - After a requested release change is verified, commit it and push the commit and release tag unless the user explicitly says not to.
+
+## Release notes
+
+- Before tagging a release, write user-facing notes in `docs/releases/<version>.md` (no install section; `scripts/release-notes.sh` appends it). The tag workflow publishes them on the GitHub release and falls back to generated notes only when the file is missing.
