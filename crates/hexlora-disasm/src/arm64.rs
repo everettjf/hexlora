@@ -139,7 +139,7 @@ pub(crate) fn stub_target<'p>(program: &'p Program, bytes: &[u8], address: u64) 
     let window = program.bytes_at(bytes, address, 16)?;
     let mut pages = Pages::default();
     let mut slot = None;
-    for (index, chunk) in window.chunks_exact(4).enumerate() {
+    for (index, chunk) in window.as_chunks::<4>().0.iter().enumerate() {
         let raw = decode_one(chunk)?;
         let at = address + index as u64 * 4;
         match flow_of(raw.opcode) {
@@ -169,7 +169,7 @@ pub(crate) fn decode(
     let mut pages = Pages::default();
     let mut extent = ExtentTracker::default();
     let mut instructions = Vec::new();
-    for (index, chunk) in window.chunks_exact(4).enumerate() {
+    for (index, chunk) in window.as_chunks::<4>().0.iter().enumerate() {
         if instructions.len() >= max {
             return (instructions, Decoded::Limit);
         }

@@ -165,7 +165,13 @@ fn parse_rich_header(bytes: &[u8], pe_pointer: usize) -> Option<(u32, Vec<RichRe
     }
     // `DanS` and three padding words precede the records.
     let mut records = Vec::new();
-    for record in clear.get(16..)?.chunks_exact(8).take(MAX_RICH_RECORDS) {
+    for record in clear
+        .get(16..)?
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .take(MAX_RICH_RECORDS)
+    {
         let id = u32::from_le_bytes([record[0], record[1], record[2], record[3]]);
         let count = u32::from_le_bytes([record[4], record[5], record[6], record[7]]);
         records.push(RichRecord {

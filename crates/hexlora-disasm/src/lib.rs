@@ -503,8 +503,10 @@ impl Program {
             return Some(format!("\"{}\"", escape(text)));
         }
         let wide: Vec<u16> = data
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_le_bytes(*pair))
             .take_while(|unit| *unit < 0x7f && printable(*unit as u8))
             .take(MAX_STRING_PREVIEW)
             .collect();
