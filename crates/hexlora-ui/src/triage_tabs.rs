@@ -56,6 +56,9 @@ pub(super) struct YaraState {
     hits: Arc<Vec<YaraHit>>,
     /// A scan of the open artifact has finished.
     pub(super) scanned: bool,
+    /// The task generation the scan runs under, to tell a running scan from
+    /// one that another task replaced.
+    generation: u64,
     summary: SharedString,
 }
 
@@ -328,7 +331,14 @@ impl HexloraApp {
             .map(|_| self.active_slice.unwrap_or(0))
     }
 
+    /// Loads the code view for a plain visit to the tab, starting at the
+    /// entry point rather than wherever an abandoned request pointed.
     pub(super) fn load_code_view(&mut self, cx: &mut Context<Self>) {
+        self.code.pending = None;
+        self.load_code_view_at_pending(cx);
+    }
+
+    fn load_code_view_at_pending(&mut self, cx: &mut Context<Self>) {
         let Some(node) = self.selected_node().filter(|node| node.is_file()).cloned() else {
             return;
         };
@@ -373,9 +383,10 @@ impl HexloraApp {
                             .take()
                             .map(|target| match target {
                                 CodeTarget::Address(address) => address,
-                                CodeTarget::TableAddress(address) => {
-                                    view.program.table_address(address)
-                                }
+                                CodeTarget::TableAddress(address) => view
+                                    .program
+                                    .code_address_from_table(address)
+                                    .unwrap_or_else(|| view.program.table_address(address)),
                             })
                             .or(view.program.entry);
                         this.code.view = Some(Arc::new(view));
@@ -446,24 +457,36 @@ impl HexloraApp {
             Some(view) => {
                 let address = match target {
                     CodeTarget::Address(address) => address,
-                    CodeTarget::TableAddress(address) => view.program.table_address(address),
+                    CodeTarget::TableAddress(address) => view
+                        .program
+                        .code_address_from_table(address)
+                        .unwrap_or_else(|| view.program.table_address(address)),
                 };
                 self.code.limit = INITIAL_LISTING_INSTRUCTIONS;
                 self.show_code_at(address, true, cx);
             }
             None => {
                 self.code.pending = Some(target);
-                self.load_code_view(cx);
+                self.load_code_view_at_pending(cx);
             }
         }
     }
 
     fn choose_debug_symbols(&mut self, cx: &mut Context<Self>) {
+        // The dialog is asynchronous; the symbols are for the file selected
+        // when it was opened, not whatever is selected when it closes.
+        let selected = self.selected;
         self.prompt_path(
             rfd::AsyncFileDialog::new().set_title("Choose a PDB, dSYM, or debug file"),
             DialogKind::File,
             cx,
-            |this, path, cx| {
+            move |this, path, cx| {
+                if this.selected != selected || this.loading {
+                    this.status =
+                        "Symbols not loaded: the selection changed or a task is running".into();
+                    cx.notify();
+                    return;
+                }
                 let pending = this
                     .code
                     .listing
@@ -474,7 +497,7 @@ impl HexloraApp {
                     pending,
                     ..CodeState::default()
                 };
-                this.load_code_view(cx);
+                this.load_code_view_at_pending(cx);
             },
         );
     }
@@ -509,12 +532,20 @@ impl HexloraApp {
         };
         let mut actions = Vec::new();
         // Symbol tables put the address in their second column.
+        // Address zero is an undefined symbol. Once the image layout is known,
+        // the action is offered only for addresses that are code.
         if matches!(selection.table, "Symbols" | "Exports")
-            && self.analysis.is_some()
+            && self.tabs().contains(&InspectorTab::Disassembly)
             && let Some(address) = selection
                 .values
                 .get(1)
                 .and_then(|value| parse_hex_offset(value))
+                .filter(|address| *address != 0)
+            && self
+                .code
+                .view
+                .as_ref()
+                .is_none_or(|view| view.program.code_address_from_table(address).is_some())
         {
             actions.push(RowAction::Disassemble(address));
         }
@@ -541,7 +572,7 @@ impl HexloraApp {
 
     /// Indices of the functions matching the search text.
     fn filtered_functions(&self, view: &CodeView) -> Arc<Vec<usize>> {
-        let query = self.query.to_lowercase();
+        let query = self.query.trim().to_lowercase();
         let mut cache = self.code.filtered.borrow_mut();
         if let Some((cached, indices)) = cache.as_ref()
             && *cached == query
@@ -560,6 +591,8 @@ impl HexloraApp {
                         .as_ref()
                         .is_some_and(|name| name.to_lowercase().contains(&query))
                     || format!("0x{:x}", function.address).contains(&query)
+                    // The table prints addresses zero-padded.
+                    || fmt_addr(function.address).contains(&query)
             })
             .map(|(index, _)| index)
             .collect();
@@ -736,8 +769,10 @@ impl HexloraApp {
         } else {
             let listing = listing.clone().expect("a listing is shown");
             let total = listing.lines.len();
-            lazy_table_panel(
+            let start = listing.start;
+            keyed_table_panel(
                 LISTING_TABLE,
+                start,
                 &["Address", "Bytes", "Instruction", "Refers to", "Source"],
                 total,
                 move |row| {
@@ -816,6 +851,13 @@ impl HexloraApp {
             cx.notify();
             return;
         }
+        if self.loading {
+            // Starting a scan now would replace the task that is running.
+            self.error =
+                Some("Wait for the current task to finish before starting a YARA scan.".into());
+            cx.notify();
+            return;
+        }
         let dialog = rfd::AsyncFileDialog::new().set_title("Choose YARA rules");
         let (dialog, kind) = if folder {
             (dialog, DialogKind::Folder)
@@ -841,6 +883,13 @@ impl HexloraApp {
         let Some(artifact) = self.artifact.clone() else {
             return;
         };
+        if self.loading {
+            // A task started while the file dialog was open.
+            self.error =
+                Some("Wait for the current task to finish before starting a YARA scan.".into());
+            cx.notify();
+            return;
+        }
         self.cancellation.cancel();
         self.cancellation = CancellationToken::default();
         self.task_generation = self.task_generation.wrapping_add(1);
@@ -849,6 +898,7 @@ impl HexloraApp {
         self.loading = true;
         self.yara = YaraState {
             rules_path: Some(rules_path.clone()),
+            generation,
             ..YaraState::default()
         };
         self.tab = InspectorTab::Yara;
@@ -992,8 +1042,10 @@ impl HexloraApp {
             .child(note(
                 if self.yara.scanned {
                     self.yara.summary.clone()
-                } else {
+                } else if self.loading && self.yara.generation == self.task_generation {
                     "Scanning…".into()
+                } else {
+                    "The scan was interrupted before it finished. Start it again from the File menu.".into()
                 },
                 MUTED,
             ))

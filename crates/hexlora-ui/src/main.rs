@@ -836,6 +836,9 @@ impl HexloraApp {
                         this.summary = None;
                         // Matches and listings describe the previous artifact.
                         this.yara = triage_tabs::YaraState::default();
+                        if this.tab == InspectorTab::Yara {
+                            this.tab = InspectorTab::Overview;
+                        }
                         this.reset_code();
                         this.capability_strings_loaded = false;
                         this.metadata = Arc::new(metadata);
@@ -5965,6 +5968,19 @@ fn lazy_table_panel(
     row_at: impl Fn(usize) -> Vec<String> + 'static,
     cx: &mut Context<HexloraApp>,
 ) -> AnyElement {
+    keyed_table_panel(title, 0, headers, total, row_at, cx)
+}
+
+/// A table whose scroll position belongs to `key` as well as its title, so a
+/// table that shows different content under one title starts each from the top.
+fn keyed_table_panel(
+    title: &'static str,
+    key: u64,
+    headers: &'static [&'static str],
+    total: usize,
+    row_at: impl Fn(usize) -> Vec<String> + 'static,
+    cx: &mut Context<HexloraApp>,
+) -> AnyElement {
     const MAX_RENDERED_ROWS: usize = 250_000;
     const ROW_HEIGHT: f32 = 32.;
     const HEADER_HEIGHT: f32 = 34.;
@@ -6104,7 +6120,7 @@ fn lazy_table_panel(
                 .when(visible_count > 0, |table| {
                     table.child(
                         uniform_list(
-                            SharedString::from(format!("table-{title}")),
+                            SharedString::from(format!("table-{title}-{key:x}")),
                             visible_count,
                             cx.processor(move |_this, range: std::ops::Range<usize>, _, cx| {
                                 range

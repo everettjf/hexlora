@@ -54,6 +54,14 @@ fn pe_functions_come_from_entry_exports_and_unwind_data() {
         Some(entry)
     );
     assert_eq!(program.resolve(&format!("0x{entry:x}")), Some(entry));
+    // Addresses from the file's own tables are RVAs; data and unmapped
+    // addresses are not code under any reading.
+    assert_eq!(
+        program.code_address_from_table(entry - program.image_base),
+        Some(entry)
+    );
+    assert_eq!(program.code_address_from_table(0), None);
+    assert_eq!(program.code_address_from_table(0x2000), None);
     assert_eq!(program.resolve("no_such_function"), None);
     assert_eq!(program.resolve("0xdeadbeef00"), None);
 }
@@ -226,6 +234,17 @@ fn listings_respect_the_instruction_limit_and_reject_data_addresses() {
         )
         .expect("one instruction");
     assert_eq!(one.instructions.len(), 1);
+
+    // Code after a function of unknown size is not attributed to it.
+    let export = program.resolve("exported_entry").expect("export");
+    let inside = program
+        .disassemble(&bytes, export + 5, Limits::default())
+        .expect("listing from inside the export");
+    assert_eq!(inside.function, None);
+    let whole = program
+        .disassemble(&bytes, export, Limits::default())
+        .expect("listing from the export");
+    assert_eq!(whole.function.as_deref(), Some("exported_entry"));
 
     let data = program
         .regions

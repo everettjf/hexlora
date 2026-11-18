@@ -501,13 +501,7 @@ fn discover_macho(macho: &goblin::mach::MachO<'_>, data: &[u8], file_base: u64) 
             }
         }
     }
-    Ok(Program::assemble(
-        architecture,
-        0,
-        false,
-        entry,
-        regions,
-        functions,
-        slots,
-    ))
+    let mut program = Program::assemble(architecture, 0, false, entry, regions, functions, slots);
+    program.text_base = text_address.unwrap_or(0);
+    Ok(program)
 }

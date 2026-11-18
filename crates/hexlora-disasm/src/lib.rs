@@ -190,6 +190,10 @@ pub struct Program {
     /// Whether the file's own tables (and Hexlora's other views) give
     /// addresses relative to `image_base`. True for PE.
     pub relative_tables: bool,
+    /// Where the Mach-O header is mapped (the `__TEXT` segment); zero for
+    /// other formats. Mach-O export addresses are offsets from it, while its
+    /// symbol-table addresses are absolute.
+    pub text_base: u64,
     pub entry: Option<u64>,
     pub regions: Vec<Region>,
     /// Sorted by address, one per address.
@@ -271,6 +275,7 @@ impl Program {
             architecture,
             image_base,
             relative_tables,
+            text_base: 0,
             entry,
             regions,
             functions: Vec::new(),
@@ -409,6 +414,18 @@ impl Program {
         } else {
             address
         }
+    }
+
+    /// Converts an address from one of the file's tables to a code address,
+    /// trying each base the format's tables use. Returns `None` when no
+    /// reading of it lands in file-backed code.
+    pub fn code_address_from_table(&self, address: u64) -> Option<u64> {
+        [
+            self.table_address(address),
+            self.text_base.wrapping_add(address),
+        ]
+        .into_iter()
+        .find(|candidate| self.is_code(*candidate))
     }
 
     /// Resolves what a user typed to an address: `entry`, a hexadecimal
@@ -564,7 +581,11 @@ impl Program {
                 region.name
             )));
         }
-        let function = self.function_containing(start);
+        // A function of unknown size is only known to own its first address;
+        // code further on may belong to a function that was never discovered.
+        let function = self
+            .function_containing(start)
+            .filter(|function| function.address == start || function.size.is_some());
         let region_end = region.address + region.file_size;
         // A function with a stated size ends there; otherwise the next known
         // function start is the furthest it can reach.
