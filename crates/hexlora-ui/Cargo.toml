@@ -5,11 +5,16 @@ edition.workspace = true
 license.workspace = true
 description = "Cross-platform application and binary inspection workbench"
 
+[features]
+default = ["yara"]
+# Local YARA rule scanning from the File menu.
+yara = ["hexlora-analysis/yara"]
+
 [dependencies]
 anyhow.workspace = true
 hexlora-core = { path = "../hexlora-core" }
 hexlora-format = { path = "../hexlora-format" }
-hexlora-analysis = { path = "../hexlora-analysis" }
+hexlora-analysis = { path = "../hexlora-analysis", default-features = false }
 hexlora-ios = { path = "../hexlora-ios" }
 hexlora-compare = { path = "../hexlora-compare" }
 hexlora-android = { path = "../hexlora-android" }

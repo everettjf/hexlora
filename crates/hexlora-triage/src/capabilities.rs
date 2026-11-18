@@ -1256,7 +1256,13 @@ mod tests {
         );
         let found = detect_capabilities(&mach, None);
         assert!(ids(&found).contains(&"injection.mach-task-port"));
-        assert!(ids(&found).contains(&"injection.ptrace"));
+        // Task-port control already says everything `ptrace` would.
+        assert!(!ids(&found).contains(&"injection.ptrace"));
+        let tracer = binary(BinaryPlatform::MacOs, &["_ptrace"]);
+        assert_eq!(
+            ids(&detect_capabilities(&tracer, None)),
+            ["injection.ptrace"]
+        );
 
         let elf = binary(
             BinaryPlatform::Linux,

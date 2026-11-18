@@ -5,8 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["yara"]
-# Local YARA rule scanning. Disable to build without the rule engine.
+default = []
+# Local YARA rule scanning. The CLI and desktop app enable it by default.
 yara = ["hexlora-triage/yara"]
 
 [dependencies]
