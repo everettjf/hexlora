@@ -6,7 +6,7 @@
 
 **A static inspection workbench for apps, packages, and binaries.**
 
-Open an `.app`, IPA, APK, MSIX, DEB, PE, Mach-O, or ELF and see what is inside it — structure, dependencies, signatures, strings, and release findings — without ever running it.
+Open an `.app`, IPA, APK, MSIX, DEB, PE, Mach-O, or ELF and see what is inside it — structure, dependencies, signatures, strings, capabilities, code, and release findings — without ever running it.
 
 [![Release](https://img.shields.io/github/v/release/everettjf/hexlora?style=flat-square&color=3b82f6)](https://github.com/everettjf/hexlora/releases/latest)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-6b7280?style=flat-square)](#install)
