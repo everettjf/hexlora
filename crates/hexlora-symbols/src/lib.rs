@@ -17,7 +17,7 @@ pub const MAX_FUNCTIONS: usize = 500_000;
 /// Most address-to-line records kept from one symbol file.
 pub const MAX_LINES: usize = 2_000_000;
 /// Largest symbol file opened.
-pub const MAX_SYMBOL_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+pub const MAX_SYMBOL_FILE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 /// A line record further than this before an address does not describe it.
 const MAX_LINE_DISTANCE: u64 = 64 * 1024;
 
@@ -291,15 +291,27 @@ pub struct LoadOptions<'a> {
     pub should_stop: &'a (dyn Fn() -> bool + Sync),
 }
 
-fn read_symbol_file(path: &Path) -> Result<Vec<u8>> {
-    let metadata = std::fs::metadata(path).map_err(|source| io_error(path, source))?;
-    if metadata.len() > MAX_SYMBOL_FILE_BYTES {
+/// Maps a symbol file. Symbol files run to gigabytes, so they are mapped
+/// rather than read into memory.
+fn map_symbol_file(path: &Path) -> Result<memmap2::Mmap> {
+    let file = std::fs::File::open(path).map_err(|source| io_error(path, source))?;
+    let length = file
+        .metadata()
+        .map_err(|source| io_error(path, source))?
+        .len();
+    if length == 0 {
+        return Err(HexloraError::Malformed(format!(
+            "{} is empty",
+            path.display()
+        )));
+    }
+    if length > MAX_SYMBOL_FILE_BYTES {
         return Err(HexloraError::Limit(format!(
             "symbol file {} exceeds {MAX_SYMBOL_FILE_BYTES} bytes",
             path.display()
         )));
     }
-    std::fs::read(path).map_err(|source| io_error(path, source))
+    unsafe { memmap2::MmapOptions::new().map(&file) }.map_err(|source| io_error(path, source))
 }
 
 /// Loads debug information for an image.
@@ -331,7 +343,7 @@ fn load_inner(
     let embedded_path = image_path.unwrap_or(Path::new("<image>"));
     let load_file = |path: &Path| -> Result<Option<DebugSymbols>> {
         let path = resolve_dsym(path);
-        let bytes = read_symbol_file(&path)?;
+        let bytes = map_symbol_file(&path)?;
         if is_pdb(&bytes) {
             return pdb::load(&path, bytes, image, options).map(Some);
         }

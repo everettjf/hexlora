@@ -22,6 +22,7 @@ Open an `.app`, IPA, APK, MSIX, DEB, PE, Mach-O, or ELF and see what is inside i
 ## Why Hexlora
 
 - **One model for every platform.** Applications, directories, packages, and single files all open as an *Artifact* with the same tree, views, and findings. PE, Mach-O, and ELF are analyzed on any host.
+- **Triage before a disassembler.** Readable symbol names, inferred capabilities with their evidence, packing and kernel-driver traits, your own YARA rules, and a bounded disassembly preview that names call targets and strings — enough to decide what deserves a real reverse-engineering tool.
 - **Release audits, not just parsing.** IPA, APK, APPX/MSIX, and DEB get platform-aware checks for identity, permissions, entitlements, privacy manifests, signing, and installation risk.
 - **Safe by construction.** Hexlora is read-only and static. It never executes, installs, mounts, or extracts what you open, and every parser runs under explicit limits.
 - **Built for large inputs.** Tables are virtualized, Hex reads 4 KiB windows on demand, and expensive work (hashes, entropy, strings, signature verification) runs only when you ask for it.
@@ -72,8 +73,11 @@ hexlora-cli --version
 Drag a file, folder, application, package, or workspace into the window — or use **File → Open File** (`⌘O`) for a single file or package and **File → Open Folder** (`⇧⌘O`) for a bundle or directory.
 
 - **Artifact Tree** groups executables, frameworks, libraries, plug-ins, resources, and metadata logically rather than by path. Archive and package members appear as a virtual tree without extraction.
-- **Inspector tabs** cover Overview, Headers, Slices, Sections, Segments, Imports, Exports, Symbols, Relocations, Dependencies, Dependency Graph, Strings, Hex, Entropy, Size Lab, Signature, Metadata, and Findings. IPA, APK, MSIX, and DEB packages add their own summary, component, signing, privacy, and findings tabs.
+- **Inspector tabs** cover Overview, Headers, Slices, Sections, Segments, Imports, Exports, Symbols, Relocations, Dependencies, Dependency Graph, Strings, Hex, Disassembly, Capabilities, Entropy, Size Lab, Signature, Metadata, and Findings. IPA, APK, MSIX, and DEB packages add their own summary, component, signing, privacy, and findings tabs.
 - **Tables** size their columns to the content. Click any row to read every value in full and copy it; when a table is wider than the panel it scrolls sideways, and **More columns →** jumps to the columns past the edge.
+- **Disassembly** lists the functions Hexlora can find in a PE, ELF, or Mach-O binary (x86, x86-64, arm64) and shows a linear listing with call targets, imports, and referenced strings named. Click a function to list it, click a line to follow its target or see its bytes in Hex, and use **Disassemble** on a Symbols or Exports row to jump straight there. A PDB, dSYM, or `.debug` file next to the binary is picked up automatically when it matches; **Load Symbols…** chooses another. Nothing is downloaded.
+- **Capabilities** shows what a binary appears able to do — inject into other processes, persist, capture input, talk to the network, map physical memory from a driver — with the imports and strings behind each inference and a confidence. It is evidence for review, not a verdict.
+- **File → Scan with YARA Rules** runs a rule file or folder you choose against every file in the artifact, archive members included, and lists the matches in a YARA tab.
 - **Search** (`⌘F`) spans names, metadata, symbols, and strings across the whole artifact, and accepts hexadecimal byte queries.
 - **File → Compare Artifacts** (`⇧⌘C`) diffs two artifacts by exact content identity: added, removed, modified, and moved files, size growth by directory and type, duplicates, and IPA privacy, signing, and entitlement changes.
 - **Release Policy** (`⌥⌘P`) applies the same versioned policy file the CLI uses and lists violations in the Policy tab.
@@ -99,6 +103,13 @@ hexlora-cli inspect ./package --hash sha256 --strings --entropy
 
 # Compare two builds and fail if the installed size grew by more than 5 MiB
 hexlora-cli compare old.ipa new.ipa --max-growth-bytes 5242880
+
+# Scan with your own YARA rules and fail on a high-severity match
+hexlora-cli inspect ./package --yara ./rules --fail-on high
+
+# Disassemble from the entry point, or from an address or function
+hexlora-cli disasm ./app.exe
+hexlora-cli disasm ./app.exe --at 0x140001060 --at DllMain --count 400
 ```
 
 | Option | Purpose |
@@ -106,15 +117,51 @@ hexlora-cli compare old.ipa new.ipa --max-growth-bytes 5242880
 | `--depth lightweight\|standard\|deep` | `standard` (default) is structural analysis. `deep` adds SHA-256, strings, entropy, signature inspection, and the dependency graph. |
 | `--format json\|markdown\|html\|sarif` | Report format. JSON is the stable default. |
 | `--hash`, `--strings`, `--entropy`, `--signature`, `--dependencies` | Enable individual expensive tasks. |
+| `--capabilities` | Search each binary for the strings capability rules look for. Without it (and below `deep`) capabilities are inferred from imports alone. |
+| `--functions` | List the functions found in each binary, with debug symbols when they are embedded or sit beside it. |
+| `--yara <rules>` | Scan every file with the YARA rules in a file or directory. Matches become findings. |
 | `--fail-on <severity>` | Exit `2` when a finding of this severity or higher is present. |
 | `--policy <file>` | Enforce a versioned JSON release policy. |
 | `--output <file>` | Write the report to a file, atomically. |
 
-Run `hexlora-cli inspect --help` or `hexlora-cli compare --help` for the full list.
+Run `hexlora-cli inspect --help`, `hexlora-cli compare --help`, or `hexlora-cli disasm --help` for the full list.
+
+### Disassembly
+
+`hexlora-cli disasm` prints a listing as text, or as JSON with `--json`. It reads the file's bytes and never loads or runs it.
+
+```text
+$ hexlora-cli disasm ./app.exe --at inject --count 6
+; ./app.exe
+; x86_64 · image base 0x140000000 · 12 functions known
+; PDB symbols from ./app.pdb · 12 functions · 21 line records
+
+inject:
+  ; C:\src\app.c:66
+  0x140001060  56                        push rsi
+  0x140001061  57                        push rdi
+  0x140001062  4883ec38                  sub rsp, 0x38
+  0x140001066  4189c8                    mov r8d, ecx
+  ; C:\src\app.c:67
+  0x140001069  b9ffff1f00                mov ecx, 0x1fffff
+  0x14000106e  31d2                      xor edx, edx
+  ; instruction limit reached; more follows
+```
+
+| Option | Purpose |
+|---|---|
+| `--at <target>` | Where to start: `entry` (the default), a hexadecimal address, or a function name. Repeatable. |
+| `--functions` | List the discovered functions instead of disassembling. |
+| `--count <n>` | Most instructions per listing (default 200). |
+| `--file <name>` | Pick the binary inside an application, package, or directory. |
+| `--slice <arch>` | Pick a slice of a universal Mach-O, by name (`arm64`) or index. |
+| `--symbols <file>` | Use this PDB, dSYM, or debug file. It must match the binary. |
+
+Function starts come from what the file states about itself: its entry point, exports, symbol tables, unwind data, and import stubs, plus debug symbols when present. The listing is linear. Hexlora does not follow indirect jumps, rebuild control-flow graphs, or decompile; hand off to a dedicated tool for that.
 
 ### Release policies in CI
 
-Policies apply to IPA, APK, APPX/MSIX, DEB, generic artifacts, and comparisons. They support built-in profiles (`balanced`, `strict`, `store_release`), rule allow and deny lists, severity overrides, and documented suppressions with optional expiry dates.
+Policies apply to IPA, APK, APPX/MSIX, DEB, generic artifacts, and comparisons. They support built-in profiles (`balanced`, `strict`, `store_release`), rule allow and deny lists, severity overrides, and documented suppressions with optional expiry dates. `forbidden_capabilities` fails the build when any binary has a listed capability, such as `injection.remote-thread` or the whole `injection.*` group.
 
 ```sh
 hexlora-cli inspect MyApp.ipa --depth deep \
@@ -151,9 +198,9 @@ Hexlora distinguishes three levels of support:
 | Windows `.appx` / `.msix` | Audit | Manifest identity, publisher, architecture, target device families, normal and restricted capabilities, entry points, block-map and signature presence, release findings |
 | Debian `.deb` | Audit | Control metadata, dependencies, installed size, payload table, Unix modes and privileged-file checks, maintainer scripts, release findings |
 | macOS `.app`, frameworks, bundles, directories | Inspect | Logical component tree, Info.plist metadata, Mach-O slices, dependencies, static and host-verified signatures, entitlements, Hardened Runtime, Gatekeeper and notarization assessment |
-| Windows PE/COFF (`.exe`, `.dll`, `.sys`) | Inspect | Headers, sections, relocations, imports, exports, symbols, dependencies, entry point, image base, Authenticode metadata |
-| Linux ELF executables and shared objects | Inspect | Headers, interpreter, sections, segments, relocations, dynamic imports and exports, symbols, dependencies, build metadata |
-| Mach-O and Universal Mach-O | Inspect | Per-slice architecture, headers, load commands, sections, segments, relocations, imports, exports, symbols, dylib dependencies, code-signature blob |
+| Windows PE/COFF (`.exe`, `.dll`, `.sys`) | Inspect | Headers, sections, relocations, imports, exports, symbols, dependencies, entry point, image base, Authenticode metadata, import hash, Rich header, overlay and packing traits, kernel-driver identification, capabilities, disassembly (x86, x86-64, arm64), PDB symbols |
+| Linux ELF executables and shared objects | Inspect | Headers, interpreter, sections, segments, relocations, dynamic imports and exports, symbols, dependencies, build metadata, capabilities, disassembly (x86, x86-64, arm64), DWARF symbols |
+| Mach-O and Universal Mach-O | Inspect | Per-slice architecture, headers, load commands, sections, segments, relocations, imports, exports, symbols, dylib dependencies, code-signature blob, capabilities, disassembly (x86-64, arm64), dSYM symbols |
 | Apple flat `.pkg` / `.mpkg` and XAR | Inspect | Table of contents, member sizes, checksums, embedded-signature count, unsafe-path indicators |
 
 <details>
@@ -211,7 +258,10 @@ Hexlora distinguishes three levels of support:
 | Artifact Tree | Logical grouping of executables, frameworks, libraries, plug-ins, resources, metadata, archive members, packages, and disk images |
 | Overview and Metadata | Kind, format, path, size, architecture, entry point, image base, interpreter, parsed metadata, dependency and signature summaries, analysis errors |
 | Headers, Slices, Sections, Segments | Unified PE/Mach-O/ELF headers, Universal Mach-O slice selection, address and file layouts, flags, lazy section entropy |
-| Imports, Exports, Symbols, Relocations | Filterable virtualized tables with names, addresses, libraries, relocation types, and addends |
+| Imports, Exports, Symbols, Relocations | Filterable virtualized tables with names, addresses, libraries, relocation types, and addends; C++, Rust, and MSVC names are shown demangled beside their mangled spelling |
+| Disassembly | Function list from entry points, exports, symbols, unwind data, import stubs, and debug symbols; bounded linear listings with named call targets, imports, strings, and source lines |
+| Capabilities | Capabilities inferred from imports and embedded strings, each with severity, confidence, evidence, and a rule ID |
+| YARA | Matches from user-supplied rules across every file in the artifact, with rule, tags, severity, and first occurrence |
 | Dependencies and Dependency Graph | Per-binary requested libraries plus an artifact-wide graph with bundled, system, missing, or unknown resolution and target paths |
 | Size Lab | Metric cards, file-type breakdown, largest files, and a treemap; comparison mode adds growth and duplicate-savings views |
 | Entropy | 64 KiB samples as an area chart and heatmap; click a block to jump to its offset in Hex |

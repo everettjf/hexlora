@@ -149,3 +149,40 @@ fn cancelled_loads_stop_and_truncated_files_do_not_panic() {
         damaged[offset] ^= 0xa5;
     }
 }
+
+#[test]
+fn damaged_pdbs_are_rejected_or_partly_read_but_never_fatal() {
+    // The PDB reader indexes with values from the file and can panic on a
+    // damaged one; loading must turn that into an error, not a crash.
+    let image = std::fs::read(fixture("fixture-x64.exe")).expect("read PE fixture");
+    let pdb = std::fs::read(fixture("fixture-x64.pdb")).expect("read PDB fixture");
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path = directory.path().join("damaged.pdb");
+    let mut state = 0x2545_f491_4f6c_dd1du64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let (mut loaded, mut refused) = (0usize, 0usize);
+    for _ in 0..400 {
+        let mut damaged = pdb.clone();
+        for _ in 0..1 + next() % 6 {
+            let at = (next() % damaged.len() as u64) as usize;
+            let value = [0u32, 1, 0x7fff_ffff, u32::MAX][(next() % 4) as usize];
+            let end = (at + 4).min(damaged.len());
+            damaged[at..end].copy_from_slice(&value.to_le_bytes()[..end - at]);
+        }
+        std::fs::write(&path, &damaged).expect("write damaged PDB");
+        match load(None, &image, &options(Some(&path))) {
+            Ok(_) => loaded += 1,
+            Err(_) => refused += 1,
+        }
+    }
+    // Most single-word changes land in padding or unused streams.
+    assert!(
+        loaded > 0 && refused > 0,
+        "loaded {loaded}, refused {refused}"
+    );
+}

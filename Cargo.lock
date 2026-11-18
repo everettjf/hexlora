@@ -3106,6 +3106,7 @@ dependencies = [
  "gimli",
  "goblin",
  "hexlora-core",
+ "memmap2",
  "pdb2",
  "serde",
  "tempfile",

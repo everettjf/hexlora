@@ -20,5 +20,6 @@
   "suppressions": [],
   "forbid_new_entitlements": true,
   "forbid_new_findings": true,
-  "forbidden_added_architectures": ["i386", "x86_64"]
+  "forbidden_added_architectures": ["i386", "x86_64"],
+  "forbidden_capabilities": []
 }

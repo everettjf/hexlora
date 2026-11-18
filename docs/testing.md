@@ -7,6 +7,11 @@ command on every push and pull request, then builds and launches a real macOS ap
 |---|---|
 | Artifact model and workspace persistence | Unit tests and backward-compatible serialization |
 | PE, Mach-O, Universal Mach-O, ELF | Magic, headers, malformed offsets, target-specific fixtures |
+| PE triage | Import hash checked against the reference algorithm, Rich header decoding, overlay, packing traits, kernel-driver identification |
+| Symbol demangling and capabilities | Itanium, Rust, and MSVC names; rule table integrity; import and string evidence; platform separation; chunk-spanning string search |
+| YARA rules | Rule files and directories, namespaces, metadata, archive members, compile errors, optional-feature build |
+| Debug symbols | PDB identity matching and refusal, embedded DWARF for x86-64 and AArch64, cancellation, truncated and damaged symbol files |
+| Disassembly | Function discovery for PE, ELF, and universal Mach-O; x86-64 and AArch64 listings; import, stub, and string naming; limits; damaged images; the running test binary |
 | Archives and untrusted input | Traversal, symlinks, depth/size/ratio limits, CRC corruption, cancellation |
 | Performance regressions | Single-pass ZIP hashing, chunk cancellation, bounded UTF-16 runs, source-aware cache invalidation, wide directory trees, string filter invalidation |
 | IPA | Identity, targets, architectures, privacy, provisioning, findings, 20-case IPAView matrix |
@@ -30,6 +35,12 @@ as automated until such a harness exists.
 
 Apple notarization and Homebrew online installation are automated by the release procedure rather
 than ordinary pull-request CI because they require protected credentials and external services.
+
+## Binary fixtures
+
+Triage, symbol, and disassembly tests use small PE, ELF, and Mach-O binaries checked in under
+[`tests/fixtures/binaries`](../tests/fixtures/binaries/README.md). They are built reproducibly
+from one original C file and are inspected, never executed.
 
 ## Real-world public artifact corpus
 

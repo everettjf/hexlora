@@ -93,9 +93,14 @@ fn discover_pe(pe: &goblin::pe::PE<'_>) -> Result<Program> {
         }
     }
     if let Some(exception) = &pe.exception_data {
+        // Entries are read one at a time: goblin's iterators slice the whole
+        // table at once and panic when a damaged directory runs past the file.
         match architecture {
             Architecture::X86_64 => {
-                for function in exception.functions().take(MAX_TABLE_ENTRIES).flatten() {
+                for index in 0..exception.len().min(MAX_TABLE_ENTRIES) {
+                    let Ok(function) = exception.get_function(index) else {
+                        break;
+                    };
                     if function.begin_address == 0 {
                         continue;
                     }
@@ -111,11 +116,10 @@ fn discover_pe(pe: &goblin::pe::PE<'_>) -> Result<Program> {
                 }
             }
             Architecture::Arm64 => {
-                for function in exception
-                    .functions_arm64()
-                    .take(MAX_TABLE_ENTRIES)
-                    .flatten()
-                {
+                for index in 0..exception.len_arm64().min(MAX_TABLE_ENTRIES) {
+                    let Ok(function) = exception.get_function_arm64(index) else {
+                        break;
+                    };
                     if function.begin_address != 0 {
                         functions.add(
                             base.wrapping_add(function.begin_address as u64),

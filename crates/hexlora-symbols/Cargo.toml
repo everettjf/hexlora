@@ -10,6 +10,7 @@ goblin.workspace = true
 pdb2.workspace = true
 gimli.workspace = true
 flate2.workspace = true
+memmap2.workspace = true
 serde.workspace = true
 
 [dev-dependencies]

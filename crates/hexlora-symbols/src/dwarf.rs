@@ -7,7 +7,7 @@ use hexlora_core::{HexloraError, Result};
 use std::{borrow::Cow, collections::HashMap, io::Read, path::Path};
 
 /// Total bytes compressed debug sections may expand to.
-const MAX_DECOMPRESSED_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_DECOMPRESSED_BYTES: u64 = 512 * 1024 * 1024;
 const SHF_COMPRESSED: u64 = 0x800;
 const ELFCOMPRESS_ZLIB: u32 = 1;
 

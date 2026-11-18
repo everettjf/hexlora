@@ -53,7 +53,7 @@ fn malformed(path: &Path, error: impl std::fmt::Display) -> HexloraError {
 
 pub(crate) fn load(
     path: &Path,
-    bytes: Vec<u8>,
+    bytes: memmap2::Mmap,
     image: &[u8],
     options: &LoadOptions<'_>,
 ) -> Result<DebugSymbols> {
