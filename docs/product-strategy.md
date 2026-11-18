@@ -9,6 +9,10 @@
 > 审计。更深的平台格式扩展（MSI、RPM、Snap/Flatpak、AAB 拆分语义等）和 2.0
 > 扩展 API 仍按下文路线演进，不属于当前已完成声明。实现证据见
 > [report-schema.md](report-schema.md)。
+>
+> 二进制分诊（2026-11）：符号反修饰、基于导入表与字符串的能力推断、PE 指纹与
+> 驱动识别、本地 YARA 规则扫描、PDB/DWARF 符号读取，以及有界的线性反汇编预览
+> 已落地，边界见 11.1。
 
 ## 1. 产品定义
 
@@ -543,11 +547,30 @@ Hexlora 分析的输入默认不可信。
 
 ### 可以通过集成满足
 
-- 反编译与 CFG → IDA/Ghidra/Binary Ninja/Hopper/Cutter/jadx。
+- 反编译与 CFG → IDA/Ghidra/Binary Ninja/Hopper/Cutter/jadx。Hexlora 内置的反汇编
+  只是交接前的预览（见 11.1）。
 - 高级 Hex/template/edit → ImHex/010 Editor/Synalyze It!。
 - 漏洞数据库 → OSV-Scanner/Trivy。
-- Malware pattern → YARA。
+- Malware pattern → YARA。已通过纯 Rust 引擎在本地执行用户提供的规则；Hexlora
+  不内置、不下载规则。
 - 动态分析 → 用户选择的 sandbox/debugger。
+
+### 11.1 反汇编预览的边界
+
+内置反汇编的目的，是让用户在交给专业工具之前判断“这个函数值不值得看”，而不是
+替代那些工具。为防止范围蔓延，以下边界是产品决定，不是待办事项：
+
+- **只做线性反汇编。** 不跟随间接跳转，不恢复控制流图，不做数据流分析。
+- **函数起点只来自文件自述的事实**：入口点、导出、符号表、unwind 数据、导入桩
+  和调试符号。不做启发式函数识别。
+- **不做反编译**，包括伪代码、类型恢复和结构体重建。
+- **只读。** 不 patch、不重定位、不模拟执行。
+- **每次列出都有上限**（指令数与函数数），大文件不因打开该视图而变慢。
+- **符号只来自本地**：文件内嵌的 DWARF，或与镜像身份匹配的同目录 PDB/dSYM。
+  不连接符号服务器。
+
+能力推断同理：结论表述为“具备某能力的静态证据”，附置信度与证据，从不表述为
+“存在某行为”。
 
 ## 12. 优先级方法
 
@@ -572,9 +595,11 @@ Hexlora 分析的输入默认不可信。
 | Explainable rules 和 HTML/SARIF | P1 |
 | PKG install impact | P1 |
 | Windows/Linux/Android platform packs | P1/P2，按用户需求 |
-| YARA/SBOM/OSV integration | P2 |
+| YARA 本地规则扫描 | 已落地 |
+| SBOM/OSV integration | P2 |
 | Kaitai/typed structures | P2 |
-| 内置小范围 disassembly preview | P3 |
+| 内置小范围 disassembly preview | 已落地（边界见 11.1） |
+| 指令级证据：IOCTL 码表、API 哈希反查、单层交叉引用 | P3，按需求重新评估 |
 | Decompiler/debugger/patching | 非近期目标 |
 
 ## 13. 成功指标

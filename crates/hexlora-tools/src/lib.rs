@@ -54,7 +54,30 @@ pub trait ExternalTool: Send + Sync {
     ) -> Result<Option<ToolOutput>> {
         self.capture(artifact)
     }
+    /// Whether the tool can be started at, or limited to, a code address.
+    fn accepts_address(&self) -> bool {
+        false
+    }
+    /// Launches the tool positioned at `address` when it accepts one; tools
+    /// that do not are launched as usual.
+    fn launch_at(&self, artifact: &ArtifactNode, _address: Option<u64>) -> Result<()> {
+        self.launch(artifact)
+    }
+    /// Captures the tool's output for the code at `address` when it accepts
+    /// one, and its usual output otherwise.
+    fn capture_at(
+        &self,
+        artifact: &ArtifactNode,
+        _address: Option<u64>,
+        timeout: Duration,
+        is_cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Option<ToolOutput>> {
+        self.capture_controlled(artifact, timeout, is_cancelled)
+    }
 }
+
+/// Builds the command-line arguments that position a tool at a virtual address.
+pub type AddressArguments = fn(u64) -> Result<Vec<String>>;
 
 pub struct CommandTool {
     id: &'static str,
@@ -63,6 +86,8 @@ pub struct CommandTool {
     args: &'static [&'static str],
     formats: Option<&'static [FileFormat]>,
     capture: bool,
+    /// Builds the arguments that position the tool at a virtual address.
+    address_args: Option<AddressArguments>,
 }
 impl CommandTool {
     pub const fn new(
@@ -78,6 +103,23 @@ impl CommandTool {
             args,
             formats: None,
             capture: false,
+            address_args: None,
+        }
+    }
+    /// Arguments used instead of the default ones when a handoff carries a
+    /// code address.
+    pub const fn with_address_args(mut self, build: AddressArguments) -> Self {
+        self.address_args = Some(build);
+        self
+    }
+    fn arguments(&self, address: Option<u64>) -> Result<Vec<String>> {
+        match (address, self.address_args) {
+            (Some(address), Some(build)) => build(address),
+            _ => Ok(self
+                .args
+                .iter()
+                .map(|argument| (*argument).to_string())
+                .collect()),
         }
     }
     pub const fn with_formats(mut self, formats: &'static [FileFormat]) -> Self {
@@ -117,6 +159,12 @@ impl ExternalTool for CommandTool {
                 .is_none_or(|formats| artifact.format.is_some_and(|f| formats.contains(&f)))
     }
     fn launch(&self, artifact: &ArtifactNode) -> Result<()> {
+        self.launch_at(artifact, None)
+    }
+    fn accepts_address(&self) -> bool {
+        self.address_args.is_some()
+    }
+    fn launch_at(&self, artifact: &ArtifactNode, address: Option<u64>) -> Result<()> {
         let ToolAvailability::Available(exe) = self.detect() else {
             return Err(HexloraError::Malformed(format!(
                 "{} is not installed",
@@ -124,7 +172,7 @@ impl ExternalTool for CommandTool {
             )));
         };
         Command::new(exe)
-            .args(self.args)
+            .args(self.arguments(address)?)
             .arg(&artifact.path)
             .stdin(Stdio::null())
             .spawn()
@@ -143,6 +191,15 @@ impl ExternalTool for CommandTool {
         timeout: Duration,
         is_cancelled: &(dyn Fn() -> bool + Sync),
     ) -> Result<Option<ToolOutput>> {
+        self.capture_at(artifact, None, timeout, is_cancelled)
+    }
+    fn capture_at(
+        &self,
+        artifact: &ArtifactNode,
+        address: Option<u64>,
+        timeout: Duration,
+        is_cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Option<ToolOutput>> {
         if !self.capture {
             return Ok(None);
         }
@@ -153,7 +210,7 @@ impl ExternalTool for CommandTool {
             )));
         };
         let mut child = Command::new(exe)
-            .args(self.args)
+            .args(self.arguments(address)?)
             .arg(&artifact.path)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -264,6 +321,39 @@ fn find_command(name: &str) -> Option<PathBuf> {
     })
 }
 
+/// How much code a capture tool is asked to show from a handoff address.
+const HANDOFF_WINDOW_BYTES: u64 = 0x200;
+
+/// IDA takes no address on its command line, but `-S` runs a script once the
+/// database is open. The script waits for analysis and jumps to the address.
+fn ida_address_arguments(address: u64) -> Result<Vec<String>> {
+    let directory = std::env::temp_dir().join("hexlora-handoff");
+    let io = |path: &std::path::Path, source| HexloraError::Io {
+        path: path.to_path_buf(),
+        source,
+    };
+    std::fs::create_dir_all(&directory).map_err(|source| io(&directory, source))?;
+    // One script per address; rewriting it is harmless and nothing accumulates.
+    let script = directory.join(format!("jump-{address:x}.idc"));
+    std::fs::write(
+        &script,
+        format!("static main() {{\n    auto_wait();\n    jumpto(0x{address:x});\n}}\n"),
+    )
+    .map_err(|source| io(&script, source))?;
+    Ok(vec![format!("-S{}", script.display())])
+}
+
+fn objdump_address_arguments(address: u64) -> Result<Vec<String>> {
+    Ok(vec![
+        "-d".into(),
+        format!("--start-address=0x{address:x}"),
+        format!(
+            "--stop-address=0x{:x}",
+            address.saturating_add(HANDOFF_WINDOW_BYTES)
+        ),
+    ])
+}
+
 #[derive(Default)]
 pub struct ToolRegistry {
     tools: BTreeMap<&'static str, Box<dyn ExternalTool>>,
@@ -287,21 +377,24 @@ impl ToolRegistry {
             .with_capture(),
         );
         r.register(CommandTool::new("ghidra", "Ghidra", &["ghidraRun"], &[]));
-        r.register(CommandTool::new(
-            "ida",
-            "IDA",
-            &[
-                "/Applications/IDA Professional 9.2.app/Contents/MacOS/ida64",
-                "/Applications/IDA Professional 9.2.app/Contents/MacOS/ida",
-                "/Applications/IDA Professional 9.1.app/Contents/MacOS/ida64",
-                "/Applications/IDA Professional 9.1.app/Contents/MacOS/ida",
-                "/Applications/IDA Professional 9.0.app/Contents/MacOS/ida64",
-                "/Applications/IDA Professional 9.0.app/Contents/MacOS/ida",
-                "ida64",
+        r.register(
+            CommandTool::new(
                 "ida",
-            ],
-            &[],
-        ));
+                "IDA",
+                &[
+                    "/Applications/IDA Professional 9.2.app/Contents/MacOS/ida64",
+                    "/Applications/IDA Professional 9.2.app/Contents/MacOS/ida",
+                    "/Applications/IDA Professional 9.1.app/Contents/MacOS/ida64",
+                    "/Applications/IDA Professional 9.1.app/Contents/MacOS/ida",
+                    "/Applications/IDA Professional 9.0.app/Contents/MacOS/ida64",
+                    "/Applications/IDA Professional 9.0.app/Contents/MacOS/ida",
+                    "ida64",
+                    "ida",
+                ],
+                &[],
+            )
+            .with_address_args(ida_address_arguments),
+        );
         r.register(CommandTool::new(
             "binary-ninja",
             "Binary Ninja",
@@ -321,12 +414,10 @@ impl ToolRegistry {
             ],
             &[],
         ));
-        r.register(CommandTool::new(
-            "radare2",
-            "radare2",
-            &["r2", "radare2"],
-            &[],
-        ));
+        r.register(
+            CommandTool::new("radare2", "radare2", &["r2", "radare2"], &[])
+                .with_address_args(|address| Ok(vec!["-s".into(), format!("0x{address:x}")])),
+        );
         r.register(CommandTool::new("cutter", "Cutter", &["cutter"], &[]));
         r.register(
             CommandTool::new("readelf", "readelf", &["readelf", "eu-readelf"], &["-a"])
@@ -336,7 +427,8 @@ impl ToolRegistry {
         r.register(
             CommandTool::new("objdump", "objdump", &["objdump", "llvm-objdump"], &["-x"])
                 .with_formats(&[FileFormat::Pe, FileFormat::Elf, FileFormat::MachO])
-                .with_capture(),
+                .with_capture()
+                .with_address_args(objdump_address_arguments),
         );
         r.register(
             CommandTool::new("dumpbin", "dumpbin", &["dumpbin.exe", "dumpbin"], &["/all"])
@@ -422,5 +514,83 @@ mod tests {
         assert!(output.timed_out);
         assert!(!output.cancelled);
         assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn handoff_addresses_reach_the_tools_that_accept_them() {
+        let registry = ToolRegistry::standard();
+        for (id, accepts) in [
+            ("radare2", true),
+            ("ida", true),
+            ("objdump", true),
+            ("ghidra", false),
+            ("binary-ninja", false),
+            ("hopper", false),
+            ("cutter", false),
+            ("strings", false),
+        ] {
+            assert_eq!(
+                registry.get(id).expect("registered tool").accepts_address(),
+                accepts,
+                "{id}"
+            );
+        }
+        let radare = CommandTool::new("r", "r", &["r2"], &["-A"])
+            .with_address_args(|address| Ok(vec!["-s".into(), format!("0x{address:x}")]));
+        assert_eq!(radare.arguments(None).unwrap(), ["-A"]);
+        assert_eq!(
+            radare.arguments(Some(0x1_4000_1060)).unwrap(),
+            ["-s", "0x140001060"]
+        );
+        assert_eq!(
+            objdump_address_arguments(0x1000).unwrap(),
+            ["-d", "--start-address=0x1000", "--stop-address=0x1200"]
+        );
+        // A tool without address support ignores the address.
+        let plain = CommandTool::new("p", "p", &["p"], &["-x"]);
+        assert_eq!(plain.arguments(Some(0x1000)).unwrap(), ["-x"]);
+
+        let ida = ida_address_arguments(0x401000).unwrap();
+        let script = ida[0].strip_prefix("-S").expect("script argument");
+        let text = std::fs::read_to_string(script).expect("handoff script exists");
+        assert!(text.contains("auto_wait();") && text.contains("jumpto(0x401000);"));
+        let _ = std::fs::remove_file(script);
+    }
+
+    #[test]
+    fn objdump_captures_only_the_code_at_a_handoff_address() {
+        let registry = ToolRegistry::standard();
+        let objdump = registry.get("objdump").expect("objdump is registered");
+        if matches!(objdump.detect(), ToolAvailability::Unavailable) {
+            return;
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/binaries/fixture-x86_64.elf");
+        let mut node = ArtifactNode::new(
+            "fixture-x86_64.elf",
+            path.clone(),
+            hexlora_core::ArtifactKind::Executable,
+        );
+        node.format = Some(FileFormat::Elf);
+        // The entry point of the fixture, read from its ELF header.
+        let bytes = std::fs::read(&path).expect("read fixture");
+        let entry = u64::from_le_bytes(bytes[24..32].try_into().unwrap());
+        let output = objdump
+            .capture_at(&node, Some(entry), DEFAULT_CAPTURE_TIMEOUT, &|| false)
+            .expect("objdump runs")
+            .expect("objdump captures");
+        assert!(output.success, "{}", output.stderr);
+        assert!(
+            output.stdout.contains(&format!("{entry:x}")),
+            "{}",
+            output.stdout
+        );
+        // The usual header dump is replaced by a disassembly of that window.
+        assert!(output.stdout.contains("Disassembly"), "{}", output.stdout);
+        assert!(
+            !output.stdout.contains("Program Header"),
+            "{}",
+            output.stdout
+        );
     }
 }

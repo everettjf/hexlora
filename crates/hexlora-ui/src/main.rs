@@ -22,9 +22,9 @@ use hexlora::string_filter::StringFilter;
 use hexlora_analysis::{
     AnalysisCache, ArtifactReader, CancellationToken, ExtractedString, HashOptions, HexReader,
     SearchHit, analyze_node, annotate_string_locations, apply_signature_analysis,
-    build_dependency_graph, enrich_analysis_entropy, entropy, extract_strings_node_cancellable,
-    global_search_cached, hash_file, inspect_metadata, inspect_signature_cancellable,
-    open_artifact, resolve_dependencies, search_node,
+    build_dependency_graph, enrich_analysis_entropy, enrich_triage, entropy,
+    extract_strings_node_cancellable, global_search_cached, hash_file, inspect_metadata,
+    inspect_signature_cancellable, open_artifact, resolve_dependencies, search_node,
 };
 use hexlora_android::{AndroidAuditReportV1, audit_apk, is_apk};
 use hexlora_compare::{ChangeKind, CompareReportV1, compare_artifacts};
@@ -35,8 +35,8 @@ use hexlora_core::{
 use hexlora_ios::{IpaAuditReportV1, audit_ipa};
 use hexlora_linux::{DebianReportV1, audit_deb, is_deb};
 use hexlora_policy::{
-    PolicyViolation, ReleasePolicyV1, evaluate_android, evaluate_compare, evaluate_ipa,
-    evaluate_linux, evaluate_windows,
+    PolicyViolation, ReleasePolicyV1, evaluate_android, evaluate_capabilities, evaluate_compare,
+    evaluate_ipa, evaluate_linux, evaluate_windows,
 };
 use hexlora_tools::{ToolAvailability, ToolBehavior, ToolRegistry};
 use hexlora_windows::{WindowsPackageReportV1, audit_msix, is_msix};
@@ -94,6 +94,7 @@ use std::{
 };
 
 mod theme;
+mod triage_tabs;
 
 use theme::{
     ACCENT, BACKGROUND as BG, BORDER, DESTRUCTIVE, DESTRUCTIVE_ACTIVE, DESTRUCTIVE_HOVER, HIGH,
@@ -110,6 +111,8 @@ actions!(
         OpenArtifact,
         OpenWorkspace,
         OpenPolicy,
+        ScanYaraRules,
+        ScanYaraRuleFolder,
         CompareArtifacts,
         CompareFolders,
         NewWindow,
@@ -187,6 +190,26 @@ fn take_startup_path() -> Option<PathBuf> {
         .take()
 }
 
+/// YARA rules named on the command line (`Hexlora <artifact> --yara <rules>`),
+/// scanned once the artifact has opened.
+fn take_startup_yara_rules() -> Option<PathBuf> {
+    static RULES: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
+    RULES
+        .get_or_init(|| {
+            let mut arguments = std::env::args_os().skip(2);
+            let mut rules = None;
+            while let Some(argument) = arguments.next() {
+                if argument == "--yara" {
+                    rules = arguments.next().map(PathBuf::from);
+                }
+            }
+            Mutex::new(rules.filter(|path| path.exists()))
+        })
+        .lock()
+        .ok()?
+        .take()
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum InspectorTab {
     Search,
@@ -224,6 +247,9 @@ enum InspectorTab {
     Findings,
     SizeLab,
     Entropy,
+    Capabilities,
+    Disassembly,
+    Yara,
 }
 
 impl InspectorTab {
@@ -264,6 +290,9 @@ impl InspectorTab {
             Self::Findings => "Findings",
             Self::SizeLab => "Size Lab",
             Self::Entropy => "Entropy",
+            Self::Capabilities => "Capabilities",
+            Self::Disassembly => "Disassembly",
+            Self::Yara => "YARA",
         }
     }
     fn from_label(label: &str) -> Option<Self> {
@@ -303,6 +332,9 @@ impl InspectorTab {
             Self::Findings,
             Self::SizeLab,
             Self::Entropy,
+            Self::Capabilities,
+            Self::Disassembly,
+            Self::Yara,
         ]
         .into_iter()
         .find(|tab| tab.label() == label)
@@ -372,6 +404,10 @@ struct HexloraApp {
     sidebar_width: f32,
     inspector_width: f32,
     row_selection: Option<Arc<RowSelection>>,
+    code: triage_tabs::CodeState,
+    /// The selected file has been searched for capability rule strings.
+    capability_strings_loaded: bool,
+    yara: triage_tabs::YaraState,
 }
 
 /// The table row whose full, untruncated values are shown beneath its table.
@@ -387,6 +423,9 @@ thread_local! {
     /// that cannot borrow the view while it renders, so `render` publishes it here first.
     static RENDERED_ROW_SELECTION: std::cell::RefCell<Option<Arc<RowSelection>>> =
         const { std::cell::RefCell::new(None) };
+    /// What the selected row can open, published by `render` for the same reason.
+    static RENDERED_ROW_ACTIONS: std::cell::RefCell<Vec<triage_tabs::RowAction>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 impl HexloraApp {
@@ -471,6 +510,9 @@ impl HexloraApp {
             high_contrast: preferences.high_contrast,
             sidebar_width: preferences.sidebar_width.clamp(180., 520.),
             inspector_width: preferences.inspector_width.clamp(240., 560.),
+            code: triage_tabs::CodeState::default(),
+            capability_strings_loaded: false,
+            yara: triage_tabs::YaraState::default(),
         }
     }
     // Native dialogs must yield before Cocoa runs its nested event loop. Keeping
@@ -672,6 +714,15 @@ impl HexloraApp {
         if let Some(report) = self.linux_report.as_deref() {
             violations.extend(evaluate_linux(policy, report));
         }
+        if let (Some(node), Some(analysis)) = (self.selected_node(), self.analysis.as_deref()) {
+            violations.extend(evaluate_capabilities(
+                policy,
+                std::iter::once(analysis)
+                    .chain(&analysis.slice_analyses)
+                    .flat_map(|binary| &binary.capabilities)
+                    .map(|capability| (node.path.as_path(), capability)),
+            ));
+        }
         violations.sort_by(|left, right| left.rule_id.cmp(&right.rule_id));
         violations.dedup();
         violations
@@ -803,6 +854,15 @@ impl HexloraApp {
                         this.selected = Some(id);
                         this.analysis = None;
                         this.summary = None;
+                        // Matches and listings describe the previous artifact.
+                        let queued = this.yara.take_queued();
+                        this.yara = triage_tabs::YaraState::default();
+                        this.queue_yara_scan(queued);
+                        if this.tab == InspectorTab::Yara {
+                            this.tab = InspectorTab::Overview;
+                        }
+                        this.reset_code();
+                        this.capability_strings_loaded = false;
                         this.metadata = Arc::new(metadata);
                         this.container_signature = None;
                         this.signature_loaded = false;
@@ -841,10 +901,13 @@ impl HexloraApp {
                             .is_some_and(ArtifactNode::is_file);
                         if should_analyze {
                             this.select(id, cx);
-                        } else if let Some(tab) = this.restore_tab.take()
-                            && this.tabs().contains(&tab)
-                        {
-                            this.set_tab(tab, cx);
+                        } else {
+                            if let Some(tab) = this.restore_tab.take()
+                                && this.tabs().contains(&tab)
+                            {
+                                this.set_tab(tab, cx);
+                            }
+                            this.start_queued_yara_scan(cx);
                         }
                     }
                     Err(e) => {
@@ -883,6 +946,8 @@ impl HexloraApp {
         self.hex_offset = 0;
         self.hex_selection = None;
         self.row_selection = None;
+        self.reset_code();
+        self.capability_strings_loaded = false;
         self.tab = InspectorTab::Overview;
         let node = self.artifact.as_ref().and_then(|r| r.find(id)).cloned();
         let artifact = self.artifact.clone();
@@ -910,6 +975,9 @@ impl HexloraApp {
                     };
                     if let (Some(analysis), Some(artifact)) = (&mut analysis, artifact.as_deref()) {
                         resolve_dependencies(analysis, artifact);
+                    }
+                    if let Some(analysis) = &mut analysis {
+                        enrich_triage(analysis);
                     }
                     let metadata = inspect_metadata(&node)?;
                     cancellation.check()?;
@@ -946,6 +1014,7 @@ impl HexloraApp {
                         {
                             this.set_tab(tab, cx);
                         }
+                        this.start_queued_yara_scan(cx);
                     }
                     Err(e) => {
                         this.error = Some(e.to_string().into());
@@ -967,6 +1036,10 @@ impl HexloraApp {
             self.load_entropy_profile(cx);
         } else if tab == InspectorTab::DependencyGraph && !self.dependency_graph_loaded {
             self.load_dependency_graph(cx);
+        } else if tab == InspectorTab::Capabilities && !self.capability_strings_loaded {
+            self.load_capability_strings(cx);
+        } else if tab == InspectorTab::Disassembly && !self.code.loaded {
+            self.load_code_view(cx);
         } else if tab == InspectorTab::Signature
             && self.should_run_host_signature()
             && !self.signature_loaded
@@ -1509,6 +1582,9 @@ impl HexloraApp {
         if self.policy.is_some() {
             tabs.push(InspectorTab::Policy);
         }
+        if self.yara_active() {
+            tabs.push(InspectorTab::Yara);
+        }
         let ipa_root_selected = self.ipa_report.is_some()
             && self.selected_node().is_some_and(|node| {
                 self.artifact
@@ -1607,6 +1683,10 @@ impl HexloraApp {
                     }
                 }
                 tabs.extend([InspectorTab::Strings, InspectorTab::Hex]);
+                if !analysis.sections.is_empty() {
+                    tabs.push(InspectorTab::Disassembly);
+                }
+                tabs.push(InspectorTab::Capabilities);
                 tabs.push(InspectorTab::Entropy);
                 if analysis.signature.is_some() || self.container_signature.is_some() {
                     tabs.push(InspectorTab::Signature);
@@ -2047,6 +2127,8 @@ impl HexloraApp {
             return;
         };
         let id = id.to_string();
+        // From the Disassembly tab a tool is handed the address being read.
+        let address = self.handoff_address();
         self.cancellation.cancel();
         self.cancellation = CancellationToken::default();
         let cancellation = self.cancellation.clone();
@@ -2059,22 +2141,28 @@ impl HexloraApp {
                     let tool = tools.get(&id).ok_or_else(|| {
                         hexlora_core::HexloraError::Malformed("tool disappeared".into())
                     })?;
-                    if let Some(output) =
-                        tool.capture_controlled(&node, std::time::Duration::from_secs(60), &|| {
-                            cancellation.check().is_err()
-                        })?
-                    {
-                        Ok::<_, hexlora_core::HexloraError>((tool.display_name(), Some(output)))
+                    let positioned = address.filter(|_| tool.accepts_address());
+                    if let Some(output) = tool.capture_at(
+                        &node,
+                        address,
+                        std::time::Duration::from_secs(60),
+                        &|| cancellation.check().is_err(),
+                    )? {
+                        Ok::<_, hexlora_core::HexloraError>((
+                            tool.display_name(),
+                            Some(output),
+                            positioned,
+                        ))
                     } else {
-                        tool.launch(&node)?;
-                        Ok((tool.display_name(), None))
+                        tool.launch_at(&node, address)?;
+                        Ok((tool.display_name(), None, positioned))
                     }
                 })
                 .await;
             this.update(cx, |this, cx| {
                 this.loading = false;
                 match result {
-                    Ok((name, Some(output))) => {
+                    Ok((name, Some(output), positioned)) => {
                         let mut text = output.stdout;
                         if !output.stderr.is_empty() {
                             text.push_str("\n--- stderr ---\n");
@@ -2091,16 +2179,38 @@ impl HexloraApp {
                         }
                         this.tool_output = Some((name.into(), text.into()));
                         this.status = format!(
-                            "{name} finished {}",
+                            "{name} finished {}{}",
                             if output.success {
                                 "successfully"
                             } else {
                                 "with errors"
-                            }
+                            },
+                            positioned
+                                .map(|address| format!(" · code at 0x{address:x}"))
+                                .unwrap_or_default()
                         )
                         .into();
                     }
-                    Ok((name, None)) => this.status = format!("Launched {name}").into(),
+                    Ok((name, None, Some(address))) => {
+                        this.status = format!("Launched {name} at 0x{address:x}").into();
+                    }
+                    Ok((name, None, None)) => {
+                        // A tool that takes no address on its command line
+                        // still gets it: on the clipboard, ready for its
+                        // go-to-address command.
+                        this.status = match address {
+                            Some(address) => {
+                                cx.write_to_clipboard(ClipboardItem::new_string(format!(
+                                    "0x{address:x}"
+                                )));
+                                format!(
+                                    "Launched {name} · 0x{address:x} copied for its go-to-address command"
+                                )
+                            }
+                            None => format!("Launched {name}"),
+                        }
+                        .into();
+                    }
                     Err(error) => this.error = Some(error.to_string().into()),
                 }
                 cx.notify();
@@ -2337,6 +2447,8 @@ impl HexloraApp {
                 )],
             });
         }
+
+        sections.extend(self.triage_report_sections());
 
         if self.strings_loaded {
             sections.push(ReportSection {
@@ -2729,6 +2841,9 @@ impl HexloraApp {
         if self.tab == InspectorTab::Compare {
             return self.render_comparison(cx).into_any_element();
         }
+        if self.tab == InspectorTab::Yara {
+            return self.render_yara(cx).into_any_element();
+        }
         let Some(node) = self.selected_node() else {
             return empty_state().into_any_element();
         };
@@ -2914,6 +3029,9 @@ impl HexloraApp {
             InspectorTab::Strings => self.render_strings(cx).into_any_element(),
             InspectorTab::Signature => self.render_signature().into_any_element(),
             InspectorTab::Entropy => self.render_entropy(cx).into_any_element(),
+            InspectorTab::Capabilities => self.render_capabilities(cx).into_any_element(),
+            InspectorTab::Disassembly => self.render_disassembly(cx),
+            InspectorTab::Yara => self.render_yara(cx).into_any_element(),
         }
     }
     fn render_search(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -3036,6 +3154,8 @@ impl HexloraApp {
                     .hover(|item| item.bg(rgb(PANEL_2)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.active_slice = Some(index);
+                        // Each slice has its own code and addresses.
+                        this.reset_code();
                         this.tab = InspectorTab::Overview;
                         this.status = format!("Inspecting universal slice {index}").into();
                         cx.notify();
@@ -5220,6 +5340,22 @@ impl HexloraApp {
                             .text_color(rgb(MUTED))
                             .child(f.description.clone()),
                     )
+                    .when(f.rule_id.is_some() || f.confidence.is_some(), |card| {
+                        let mut parts = Vec::new();
+                        if let Some(rule) = &f.rule_id {
+                            parts.push(format!("Rule {rule}"));
+                        }
+                        if let Some(confidence) = f.confidence {
+                            parts.push(format!("{} confidence", confidence.label()));
+                        }
+                        card.child(
+                            div()
+                                .mt_2()
+                                .text_xs()
+                                .text_color(rgb(MUTED))
+                                .child(parts.join(" · ")),
+                        )
+                    })
                     .when(!f.evidence.is_empty(), |card| {
                         card.child(
                             div()
@@ -5383,6 +5519,9 @@ impl Render for HexloraApp {
         RENDERED_ROW_SELECTION.with(|selection| {
             *selection.borrow_mut() = self.row_selection.clone();
         });
+        RENDERED_ROW_ACTIONS.with(|actions| {
+            *actions.borrow_mut() = self.row_actions();
+        });
         let workspace_background = if self.high_contrast { 0x000000 } else { BG };
         let workspace_text = if self.high_contrast { 0xffffff } else { TEXT };
         let report_menu_view = cx.entity();
@@ -5397,6 +5536,12 @@ impl Render for HexloraApp {
             .on_action(cx.listener(|this, _: &OpenArtifact, _, cx| this.choose(true, cx)))
             .on_action(cx.listener(|this, _: &OpenWorkspace, _, cx| this.open_workspace(cx)))
             .on_action(cx.listener(|this, _: &OpenPolicy, _, cx| this.open_policy(cx)))
+            .on_action(
+                cx.listener(|this, _: &ScanYaraRules, _, cx| this.choose_yara_rules(false, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &ScanYaraRuleFolder, _, cx| this.choose_yara_rules(true, cx)),
+            )
             .on_action(cx.listener(|this, _: &SaveWorkspace, _, cx| this.save_workspace(cx)))
             .on_action(cx.listener(|this, _: &FocusSearch, window, cx| {
                 this.search_input.focus_handle(cx).focus(window)
@@ -5879,6 +6024,19 @@ fn lazy_table_panel(
     row_at: impl Fn(usize) -> Vec<String> + 'static,
     cx: &mut Context<HexloraApp>,
 ) -> AnyElement {
+    keyed_table_panel(title, 0, headers, total, row_at, cx)
+}
+
+/// A table whose scroll position belongs to `key` as well as its title, so a
+/// table that shows different content under one title starts each from the top.
+fn keyed_table_panel(
+    title: &'static str,
+    key: u64,
+    headers: &'static [&'static str],
+    total: usize,
+    row_at: impl Fn(usize) -> Vec<String> + 'static,
+    cx: &mut Context<HexloraApp>,
+) -> AnyElement {
     const MAX_RENDERED_ROWS: usize = 250_000;
     const ROW_HEIGHT: f32 = 32.;
     const HEADER_HEIGHT: f32 = 34.;
@@ -6018,7 +6176,7 @@ fn lazy_table_panel(
                 .when(visible_count > 0, |table| {
                     table.child(
                         uniform_list(
-                            SharedString::from(format!("table-{title}")),
+                            SharedString::from(format!("table-{title}-{key:x}")),
                             visible_count,
                             cx.processor(move |_this, range: std::ops::Range<usize>, _, cx| {
                                 range
@@ -6047,6 +6205,7 @@ fn lazy_table_panel(
                                                 this.row_selection = (this.row_selection.as_deref()
                                                     != Some(&clicked))
                                                 .then(|| Arc::new(clicked));
+                                                this.row_activated(cx);
                                                 cx.notify();
                                             }))
                                             .children(row.into_iter().zip(row_weights.iter()).map(
@@ -6227,6 +6386,11 @@ fn row_detail_panel(
     cx: &mut Context<HexloraApp>,
 ) -> impl IntoElement {
     const MAX_SHOWN_CHARS: usize = 4_000;
+    let actions = RENDERED_ROW_ACTIONS
+        .with(|actions| actions.borrow().clone())
+        .into_iter()
+        .map(|action| action.button(cx))
+        .collect::<Vec<_>>();
     let copy_text = headers
         .iter()
         .zip(&selection.values)
@@ -6258,6 +6422,7 @@ fn row_detail_panel(
                         .text_color(rgb(MUTED))
                         .child(format!("Row {} · full values", selection.index + 1)),
                 )
+                .children(actions)
                 .child(
                     Button::new("row-detail-copy")
                         .label("Copy Row")
@@ -6357,25 +6522,44 @@ fn symbol_table(
     cx: &mut Context<HexloraApp>,
 ) -> impl IntoElement {
     let query = query.to_lowercase();
+    // The mangled spelling gets its own column only when something was demangled.
+    let demangled = symbols.iter().any(|symbol| symbol.demangled.is_some());
+    let headers: &'static [&'static str] = if demangled {
+        &["Name", "Address", "Library", "Mangled name"]
+    } else {
+        &["Name", "Address", "Library"]
+    };
     table_panel(
         title,
-        &["Name", "Address", "Library"],
+        headers,
         symbols
             .iter()
             .filter(|symbol| {
                 query.is_empty()
                     || symbol.name.to_lowercase().contains(&query)
                     || symbol
+                        .demangled
+                        .as_ref()
+                        .is_some_and(|name| name.to_lowercase().contains(&query))
+                    || symbol
                         .library
                         .as_ref()
                         .is_some_and(|library| library.to_lowercase().contains(&query))
             })
             .map(|s| {
-                vec![
-                    s.name.clone(),
+                let mut row = vec![
+                    s.display_name().to_string(),
                     s.address.map(fmt_addr).unwrap_or_default(),
                     s.library.clone().unwrap_or_default(),
-                ]
+                ];
+                if demangled {
+                    row.push(if s.demangled.is_some() {
+                        s.name.clone()
+                    } else {
+                        String::new()
+                    });
+                }
+                row
             })
             .collect(),
         cx,
@@ -7196,6 +7380,18 @@ fn open_policy_from_menu(_: &OpenPolicy, cx: &mut App) {
     }
 }
 
+fn scan_yara_rules_from_menu(_: &ScanYaraRules, cx: &mut App) {
+    if let Some(view) = active_hexlora_view(cx) {
+        view.update(cx, |this, cx| this.choose_yara_rules(false, cx));
+    }
+}
+
+fn scan_yara_rule_folder_from_menu(_: &ScanYaraRuleFolder, cx: &mut App) {
+    if let Some(view) = active_hexlora_view(cx) {
+        view.update(cx, |this, cx| this.choose_yara_rules(true, cx));
+    }
+}
+
 fn compare_artifacts_from_menu(_: &CompareArtifacts, cx: &mut App) {
     if let Some(view) = active_hexlora_view(cx) {
         view.update(cx, |this, cx| this.choose_comparison(false, cx));
@@ -7462,6 +7658,9 @@ fn install_menus(cx: &mut App) {
                 MenuItem::action("Open Workspace…", OpenWorkspace),
                 MenuItem::action("Open Release Policy…", OpenPolicy),
                 MenuItem::separator(),
+                MenuItem::action("Scan with YARA Rules…", ScanYaraRules),
+                MenuItem::action("Scan with YARA Rule Folder…", ScanYaraRuleFolder),
+                MenuItem::separator(),
                 MenuItem::action("Compare Artifacts…", CompareArtifacts),
                 MenuItem::action("Compare Folders…", CompareFolders),
                 MenuItem::separator(),
@@ -7534,7 +7733,10 @@ fn open_hexlora_window(cx: &mut App) {
             |window, cx| {
                 let view = cx.new(|cx| HexloraApp::new(window, cx));
                 if let Some(path) = take_startup_path() {
-                    view.update(cx, |this, cx| this.load(path, cx));
+                    view.update(cx, |this, cx| {
+                        this.queue_yara_scan(take_startup_yara_rules());
+                        this.load(path, cx);
+                    });
                 }
                 cx.global_mut::<WindowViews>()
                     .0
@@ -7563,6 +7765,8 @@ fn main() {
         cx.on_action(open_artifact_from_menu);
         cx.on_action(open_workspace_from_menu);
         cx.on_action(open_policy_from_menu);
+        cx.on_action(scan_yara_rules_from_menu);
+        cx.on_action(scan_yara_rule_folder_from_menu);
         cx.on_action(compare_artifacts_from_menu);
         cx.on_action(compare_folders_from_menu);
         cx.on_action(save_workspace_from_menu);
@@ -7584,6 +7788,7 @@ fn main() {
             KeyBinding::new("cmd-shift-o", OpenArtifact, None),
             KeyBinding::new("cmd-alt-o", OpenWorkspace, None),
             KeyBinding::new("cmd-alt-p", OpenPolicy, None),
+            KeyBinding::new("cmd-shift-y", ScanYaraRules, None),
             KeyBinding::new("cmd-shift-c", CompareArtifacts, None),
             KeyBinding::new("cmd-s", SaveWorkspace, None),
             KeyBinding::new("cmd-f", FocusSearch, None),

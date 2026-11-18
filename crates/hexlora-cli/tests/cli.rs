@@ -151,3 +151,324 @@ fn policy_violations_are_visible_in_every_human_and_machine_report() {
         );
     }
 }
+
+fn fixture(name: &str) -> String {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/binaries")
+        .join(name)
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_string()
+}
+
+fn run(arguments: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_hexlora-cli"))
+        .args(arguments)
+        .output()
+        .expect("run CLI")
+}
+
+#[test]
+fn disasm_prints_a_named_listing_and_stays_off_stderr() {
+    let output = run(&["disasm", &fixture("fixture-x64.exe")]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stderr.is_empty());
+    let text = String::from_utf8(output.stdout).expect("UTF-8 listing");
+    assert!(text.contains("x86_64 · image base 0x140000000"), "{text}");
+    assert!(text.contains("PDB symbols from"), "{text}");
+    assert!(text.contains("fixture_start:"), "{text}");
+    assert!(text.contains("call 0x140001060"), "{text}");
+    assert!(text.contains("; inject"), "{text}");
+    assert!(text.contains("; KERNEL32.dll!ExitProcess"), "{text}");
+    assert!(text.contains("fixture.c:"), "{text}");
+    assert!(text.trim_end().ends_with("; end of function"), "{text}");
+}
+
+#[test]
+fn disasm_json_lists_functions_and_honours_targets_and_limits() {
+    let output = run(&[
+        "disasm",
+        &fixture("fixture-universal.dylib"),
+        "--slice",
+        "arm64",
+        "--at",
+        "write_message",
+        "--at",
+        "_puts",
+        "--count",
+        "3",
+        "--json",
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("disasm JSON");
+    assert_eq!(report["schema_version"], 1);
+    assert_eq!(report["architecture"], "arm64");
+    assert_eq!(report["listings"].as_array().map(Vec::len), Some(2));
+    assert_eq!(report["listings"][0]["function"], "_write_message");
+    assert_eq!(
+        report["listings"][0]["lines"].as_array().map(Vec::len),
+        Some(3)
+    );
+    assert_eq!(report["listings"][0]["end"], "instruction_limit");
+    assert_eq!(report["listings"][1]["lines"][1]["comment"], "_puts");
+
+    let output = run(&[
+        "disasm",
+        &fixture("fixture-x86_64.elf"),
+        "--functions",
+        "--json",
+    ]);
+    assert!(output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("function JSON");
+    assert_eq!(report["function_count"], 4);
+    assert_eq!(report["debug_symbols"]["format"], "dwarf");
+    assert!(report["listings"].as_array().is_some_and(Vec::is_empty));
+    let names: Vec<&str> = report["functions"]
+        .as_array()
+        .expect("functions")
+        .iter()
+        .filter_map(|function| function["name"].as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["add_numbers", "message_text", "exported_entry", "_start"]
+    );
+}
+
+#[test]
+fn disasm_reports_usage_problems_with_exit_status_one() {
+    let fixtures = fixture("");
+    for (arguments, expected) in [
+        // A directory of several binaries needs a choice.
+        (vec!["disasm", fixtures.as_str()], "choose one with --file"),
+        (
+            vec!["disasm", fixtures.as_str(), "--file", "missing.exe"],
+            "no binary named",
+        ),
+        // A dylib has no entry point to default to.
+        (
+            vec!["disasm", &fixture("fixture-universal.dylib")],
+            "has no entry point",
+        ),
+        (
+            vec!["disasm", &fixture("fixture-x64.exe"), "--at", "nowhere"],
+            "not an address in this image",
+        ),
+        (
+            vec!["disasm", &fixture("fixture-x64.exe"), "--slice", "ppc"],
+            "has no \"ppc\" slice",
+        ),
+        // A symbol file named on the command line must be usable.
+        (
+            vec![
+                "disasm",
+                &fixture("fixture-driver.sys"),
+                "--symbols",
+                &fixture("fixture.c"),
+            ],
+            "symbols from",
+        ),
+        (
+            vec!["disasm", &fixture("fixture.c")],
+            "contains no PE, ELF, or Mach-O",
+        ),
+    ] {
+        let output = run(&arguments);
+        assert_eq!(output.status.code(), Some(1), "{arguments:?}");
+        assert!(output.stdout.is_empty(), "{arguments:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(expected), "{arguments:?}: {stderr}");
+    }
+    // Selecting by name inside a directory works.
+    let output = run(&["disasm", &fixtures, "--file", "fixture-aarch64.elf"]);
+    assert!(output.status.success());
+}
+
+#[test]
+fn inspect_reports_capabilities_fingerprints_functions_and_rule_ids() {
+    let output = run(&["inspect", &fixture("fixture-x64.exe"), "--functions"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("report JSON");
+    let file = &report["files"][0];
+    let analysis = &file["analysis"];
+    assert_eq!(
+        analysis["metadata"]["Import hash (imphash)"],
+        "445e41ce919b3b7add0a68ebcd2b653c"
+    );
+    assert_eq!(analysis["capabilities"][0]["id"], "injection.remote-thread");
+    assert_eq!(analysis["capabilities"][0]["confidence"], "High");
+    let finding = report["findings"]
+        .as_array()
+        .expect("findings")
+        .iter()
+        .find(|finding| finding["rule_id"] == "capability.injection.remote-thread")
+        .expect("capability finding");
+    assert_eq!(finding["severity"], "Medium");
+    assert_eq!(finding["confidence"], "High");
+    assert_eq!(file["code"][0]["architecture"], "x86_64");
+    assert_eq!(file["code"][0]["debug_symbols"]["format"], "pdb");
+    assert!(
+        file["code"][0]["functions"]
+            .as_array()
+            .is_some_and(|functions| functions.iter().any(|f| f["name"] == "inject"))
+    );
+    // Functions are opt-in.
+    let plain = run(&["inspect", &fixture("fixture-x64.exe")]);
+    let plain: serde_json::Value = serde_json::from_slice(&plain.stdout).expect("report JSON");
+    assert!(plain["files"][0].get("code").is_none());
+
+    let sarif = run(&["inspect", &fixture("fixture-x64.exe"), "--format", "sarif"]);
+    let sarif: serde_json::Value = serde_json::from_slice(&sarif.stdout).expect("SARIF JSON");
+    assert!(
+        sarif["runs"][0]["results"]
+            .as_array()
+            .expect("results")
+            .iter()
+            .any(|result| result["ruleId"] == "capability.injection.remote-thread")
+    );
+}
+
+#[test]
+fn demangled_names_accompany_raw_symbols() {
+    // The test binary itself is full of mangled Rust symbols.
+    let Ok(current) = std::env::current_exe() else {
+        return;
+    };
+    let output = run(&["inspect", current.to_str().expect("UTF-8 path")]);
+    assert!(output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("report JSON");
+    let analysis = &report["files"][0]["analysis"];
+    let demangled = ["imports", "exports", "symbols"]
+        .iter()
+        .flat_map(|table| analysis[table].as_array().into_iter().flatten())
+        .filter(|symbol| symbol.get("demangled").is_some())
+        .count();
+    if analysis.is_object() {
+        assert!(demangled > 0, "no symbol in a Rust binary was demangled");
+    }
+}
+
+#[test]
+fn policies_can_forbid_or_silence_capabilities_by_rule_id() {
+    let directory = tempfile::tempdir().expect("create policy directory");
+    let policy = directory.path().join("policy.json");
+    let executable = fixture("fixture-x64.exe");
+    let inspect = |policy_json: &str| {
+        std::fs::write(&policy, policy_json).expect("write policy");
+        let output = run(&[
+            "inspect",
+            &executable,
+            "--policy",
+            policy.to_str().expect("UTF-8 policy path"),
+        ]);
+        let report: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("report JSON");
+        let rules: Vec<String> = report["policy_violations"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|violation| violation["rule_id"].as_str().map(str::to_string))
+            .collect();
+        (output.status.code(), rules)
+    };
+
+    let (code, rules) = inspect(r#"{"forbidden_capabilities":["injection.*"]}"#);
+    assert_eq!(code, Some(2));
+    assert_eq!(rules, ["policy.forbidden-capability"]);
+
+    let (code, rules) = inspect(r#"{"fail_on_severity":"Medium"}"#);
+    assert_eq!(code, Some(2));
+    assert_eq!(rules, ["capability.injection.remote-thread"]);
+
+    let (code, rules) = inspect(
+        r#"{"fail_on_severity":"Medium","disabled_rules":["capability.injection.remote-thread"]}"#,
+    );
+    assert_eq!(code, Some(0));
+    assert!(rules.is_empty());
+
+    let (code, rules) = inspect(r#"{"forbidden_capabilities":["network.*"]}"#);
+    assert_eq!(code, Some(0));
+    assert!(rules.is_empty());
+}
+
+#[cfg(feature = "yara")]
+#[test]
+fn yara_matches_become_findings_and_bad_rules_fail_before_any_output() {
+    let directory = tempfile::tempdir().expect("create rule directory");
+    let rules = directory.path().join("rules.yar");
+    std::fs::write(
+        &rules,
+        r#"rule fixture_message : demo {
+    meta:
+        description = "Contains the fixture message."
+        severity = "high"
+    strings:
+        $a = "hexlora fixture"
+    condition:
+        $a
+}"#,
+    )
+    .expect("write rules");
+    let rules_path = rules.to_str().expect("UTF-8 rules path");
+    let fixtures = fixture("");
+    let output = run(&[
+        "inspect",
+        &fixtures,
+        "--yara",
+        rules_path,
+        "--fail-on",
+        "high",
+    ]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("report JSON");
+    let matched: Vec<&str> = report["findings"]
+        .as_array()
+        .expect("findings")
+        .iter()
+        .filter(|finding| finding["rule_id"] == "yara.fixture_message")
+        .filter_map(|finding| finding["path"].as_str())
+        .collect();
+    // The user-mode binaries and the C source contain the message. The
+    // driver never references it, so the linker dropped it; the PDB holds
+    // names, not data.
+    assert_eq!(matched.len(), 5, "{matched:?}");
+    assert!(
+        !matched
+            .iter()
+            .any(|path| path.ends_with(".pdb") || path.ends_with(".sys"))
+    );
+    let pdb = report["files"]
+        .as_array()
+        .expect("files")
+        .iter()
+        .find(|file| {
+            file["path"]
+                .as_str()
+                .is_some_and(|path| path.ends_with(".pdb"))
+        })
+        .expect("PDB file report");
+    assert!(pdb["yara"].as_array().is_some_and(Vec::is_empty));
+
+    std::fs::write(&rules, "rule broken { condition: ").expect("write broken rules");
+    let output = run(&["inspect", &fixtures, "--yara", rules_path]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("YARA rules"));
+}

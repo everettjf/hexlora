@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use hexlora_android::AndroidAuditReportV1;
 use hexlora_compare::CompareReportV1;
-use hexlora_core::{Finding, Severity};
+use hexlora_core::{Capability, Finding, Severity};
 use hexlora_ios::IpaAuditReportV1;
 use hexlora_linux::DebianReportV1;
 use hexlora_windows::WindowsPackageReportV1;
@@ -52,6 +52,10 @@ pub struct ReleasePolicyV1 {
     pub forbid_new_findings: bool,
     #[serde(default)]
     pub forbidden_added_architectures: Vec<String>,
+    /// Capability identifiers no binary may have, such as
+    /// `injection.remote-thread`. A trailing `.*` forbids a whole group.
+    #[serde(default)]
+    pub forbidden_capabilities: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -102,16 +106,53 @@ pub fn evaluate_generic(
                 .iter()
                 .filter(|finding| severity_rank(finding.severity) >= severity_rank(minimum))
                 .map(|finding| PolicyViolation {
-                    rule_id: format!(
-                        "analysis.{}",
-                        finding.title.to_ascii_lowercase().replace(' ', "-")
-                    ),
+                    rule_id: finding.policy_rule_id(),
                     severity: finding.severity,
                     message: finding.title.clone(),
                 }),
         );
     }
     finalize(policy, violations)
+}
+
+/// Reports every binary capability the policy forbids, whatever its severity.
+/// `capabilities` pairs each capability with the file it was found in.
+pub fn evaluate_capabilities<'a>(
+    policy: &ReleasePolicyV1,
+    capabilities: impl IntoIterator<Item = (&'a std::path::Path, &'a Capability)>,
+) -> Vec<PolicyViolation> {
+    if policy.forbidden_capabilities.is_empty() {
+        return Vec::new();
+    }
+    let forbidden = |id: &str| {
+        policy
+            .forbidden_capabilities
+            .iter()
+            .any(|pattern| match pattern.strip_suffix(".*") {
+                Some(group) => id
+                    .strip_prefix(group)
+                    .is_some_and(|rest| rest.starts_with('.')),
+                None => pattern == id,
+            })
+    };
+    let violations = capabilities
+        .into_iter()
+        .filter(|(_, capability)| forbidden(&capability.id))
+        .map(|(path, capability)| PolicyViolation {
+            rule_id: "policy.forbidden-capability".into(),
+            severity: Severity::High,
+            message: format!(
+                "{} has forbidden capability {} ({})",
+                path.display(),
+                capability.id,
+                capability.name
+            ),
+        })
+        .collect();
+    let mut violations = finalize(policy, violations);
+    // Each slice of a universal binary reports the same capability.
+    violations.dedup();
+    violations
 }
 
 pub fn evaluate_ipa(policy: &ReleasePolicyV1, report: &IpaAuditReportV1) -> Vec<PolicyViolation> {
@@ -469,5 +510,76 @@ mod tests {
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].rule_id, "rule.override");
         assert_eq!(violations[0].severity, Severity::Critical);
+    }
+
+    #[test]
+    fn findings_are_matched_by_explicit_rule_id_before_their_title() {
+        let policy: ReleasePolicyV1 = serde_json::from_str(
+            r#"{"fail_on_severity":"Low","disabled_rules":["capability.injection.ptrace"]}"#,
+        )
+        .unwrap();
+        let explicit = Finding::new(
+            Severity::Medium,
+            hexlora_core::FindingCategory::Capability,
+            "Capability: Trace or modify another process",
+            "",
+        )
+        .with_rule("capability.injection.ptrace");
+        let legacy = Finding::new(
+            Severity::Medium,
+            hexlora_core::FindingCategory::Format,
+            "Absolute RPATH",
+            "",
+        );
+        let violations = evaluate_generic(&policy, 1, &[explicit, legacy]);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rule_id, "analysis.absolute-rpath");
+    }
+
+    #[test]
+    fn forbidden_capabilities_match_exactly_or_by_group() {
+        let capability = |id: &str| Capability {
+            id: id.into(),
+            group: "Group".into(),
+            name: "Name".into(),
+            description: String::new(),
+            severity: Severity::Info,
+            confidence: hexlora_core::Confidence::High,
+            evidence: vec![],
+        };
+        let found = [
+            capability("injection.remote-thread"),
+            capability("network.http-client"),
+            capability("networking.other"),
+            capability("crypto.symmetric-encryption"),
+        ];
+        let path = std::path::Path::new("app.exe");
+        let pairs = || found.iter().map(|capability| (path, capability));
+
+        let none: ReleasePolicyV1 = serde_json::from_str("{}").unwrap();
+        assert!(evaluate_capabilities(&none, pairs()).is_empty());
+
+        let policy: ReleasePolicyV1 = serde_json::from_str(
+            r#"{"forbidden_capabilities":["injection.remote-thread","network.*"]}"#,
+        )
+        .unwrap();
+        let violations = evaluate_capabilities(&policy, pairs());
+        // `network.*` must not swallow the unrelated `networking` group.
+        assert_eq!(violations.len(), 2);
+        assert!(
+            violations
+                .iter()
+                .all(|v| v.rule_id == "policy.forbidden-capability")
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.message.contains("injection.remote-thread"))
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.message.contains("network.http-client"))
+        );
     }
 }

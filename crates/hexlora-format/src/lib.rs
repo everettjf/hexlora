@@ -4,6 +4,8 @@ use goblin::Object;
 use hexlora_core::*;
 use std::path::Path;
 
+mod pe_triage;
+
 pub const MAX_PARSE_BYTES: u64 = 512 * 1024 * 1024;
 
 pub struct AnalysisInput<'a> {
@@ -141,7 +143,7 @@ impl BinaryAnalyzer for PeAnalyzer {
 
     fn analyze(&self, input: &AnalysisInput<'_>) -> Result<BinaryAnalysis> {
         match Object::parse(input.bytes).map_err(|e| HexloraError::Malformed(e.to_string()))? {
-            Object::PE(pe) => analyze_pe(&pe),
+            Object::PE(pe) => analyze_pe(&pe, input.bytes),
             _ => Err(HexloraError::Malformed("not a PE binary".into())),
         }
     }
@@ -157,7 +159,7 @@ impl BinaryAnalyzer for MachOAnalyzer {
 
     fn analyze(&self, input: &AnalysisInput<'_>) -> Result<BinaryAnalysis> {
         match Object::parse(input.bytes).map_err(|e| HexloraError::Malformed(e.to_string()))? {
-            Object::Mach(mach) => analyze_mach(mach),
+            Object::Mach(mach) => analyze_mach(mach, input.bytes),
             _ => Err(HexloraError::Malformed("not a Mach-O binary".into())),
         }
     }
@@ -371,7 +373,7 @@ pub fn analyze_binary(bytes: &[u8]) -> Result<BinaryAnalysis> {
     })
 }
 
-fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
+fn analyze_pe(pe: &goblin::pe::PE<'_>, bytes: &[u8]) -> Result<BinaryAnalysis> {
     let mut a = BinaryAnalysis {
         format: Some(FileFormat::Pe),
         platform: Some(BinaryPlatform::Windows),
@@ -724,6 +726,23 @@ fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
             String::from_utf8_lossy(filename).into_owned(),
         );
         a.metadata.insert("PDB age".into(), pdb.age.to_string());
+        // The GUID is stored in its mixed-endian on-disk layout.
+        let guid = pdb.signature;
+        a.metadata.insert(
+            "PDB GUID".into(),
+            format!(
+                "{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{}",
+                u32::from_le_bytes([guid[0], guid[1], guid[2], guid[3]]),
+                u16::from_le_bytes([guid[4], guid[5]]),
+                u16::from_le_bytes([guid[6], guid[7]]),
+                guid[8],
+                guid[9],
+                guid[10..16]
+                    .iter()
+                    .map(|byte| format!("{byte:02X}"))
+                    .collect::<String>()
+            ),
+        );
         a.metadata.insert(
             "Compiler hint".into(),
             "Microsoft/LLVM CodeView (PDB)".into(),
@@ -783,6 +802,7 @@ fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
             name: import.name.to_string(),
             address: Some(import.rva as u64),
             library: Some(import.dll.to_string()),
+            demangled: None,
         });
     }
     for export in &pe.exports {
@@ -790,6 +810,7 @@ fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
             name: export.name.unwrap_or("<ordinal>").to_string(),
             address: Some(export.rva as u64),
             library: None,
+            demangled: None,
         });
     }
     a.dependencies
@@ -798,6 +819,7 @@ fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
             path: None,
             status: DependencyStatus::Unknown,
         }));
+    pe_triage::enrich(pe, bytes, &mut a);
     Ok(a)
 }
 
@@ -1155,6 +1177,7 @@ fn analyze_elf(elf: &goblin::elf::Elf<'_>, bytes: &[u8]) -> Result<BinaryAnalysi
                 name: name.into(),
                 address: Some(sym.st_value),
                 library: None,
+                demangled: None,
             };
             if sym.st_shndx == 0 {
                 a.imports.push(item);
@@ -1173,6 +1196,7 @@ fn analyze_elf(elf: &goblin::elf::Elf<'_>, bytes: &[u8]) -> Result<BinaryAnalysi
                 name: name.into(),
                 address: Some(sym.st_value),
                 library: None,
+                demangled: None,
             });
         }
     }
@@ -1245,10 +1269,10 @@ fn xml_attribute(text: &str, element: &str, attribute: &str) -> Option<String> {
     }
 }
 
-fn analyze_mach(mach: goblin::mach::Mach<'_>) -> Result<BinaryAnalysis> {
+fn analyze_mach(mach: goblin::mach::Mach<'_>, bytes: &[u8]) -> Result<BinaryAnalysis> {
     use goblin::mach::Mach;
     match mach {
-        Mach::Binary(macho) => analyze_macho_binary(&macho),
+        Mach::Binary(macho) => analyze_macho_binary(&macho, bytes),
         Mach::Fat(fat) => {
             use goblin::mach::SingleArch;
 
@@ -1274,7 +1298,11 @@ fn analyze_mach(mach: goblin::mach::Mach<'_>) -> Result<BinaryAnalysis> {
                     .get(index)
                     .map_err(|error| HexloraError::Malformed(error.to_string()))?
                 {
-                    let mut slice = analyze_macho_binary(&macho)?;
+                    let slice_bytes = bytes
+                        .get(arch.offset as usize..)
+                        .map(|rest| &rest[..rest.len().min(arch.size as usize)])
+                        .unwrap_or(&[]);
+                    let mut slice = analyze_macho_binary(&macho, slice_bytes)?;
                     for section in &mut slice.sections {
                         section.offset = section.offset.saturating_add(info.offset);
                     }
@@ -1297,7 +1325,7 @@ fn analyze_mach(mach: goblin::mach::Mach<'_>) -> Result<BinaryAnalysis> {
     }
 }
 
-fn analyze_macho_binary(m: &goblin::mach::MachO<'_>) -> Result<BinaryAnalysis> {
+fn analyze_macho_binary(m: &goblin::mach::MachO<'_>, bytes: &[u8]) -> Result<BinaryAnalysis> {
     use goblin::mach::header;
 
     use goblin::mach::load_command::{CommandVariant, cmd_to_str};
@@ -1507,38 +1535,176 @@ fn analyze_macho_binary(m: &goblin::mach::MachO<'_>) -> Result<BinaryAnalysis> {
             status: DependencyStatus::Unknown,
         });
     }
-    for export in m
-        .exports()
-        .map_err(|e| HexloraError::Malformed(e.to_string()))?
-    {
-        a.exports.push(SymbolInfo {
-            name: export.name,
-            address: Some(export.offset),
-            library: None,
-        });
-    }
-    for import in m
-        .imports()
-        .map_err(|e| HexloraError::Malformed(e.to_string()))?
-    {
-        a.imports.push(SymbolInfo {
-            name: import.name.into(),
-            address: Some(import.offset),
-            library: Some(import.dylib.into()),
-        });
-    }
-    for symbol in m.symbols() {
-        if let Ok((name, nlist)) = symbol
-            && !name.is_empty()
+    // goblin walks the export trie recursively and trusts its child offsets,
+    // so a trie that loops back on itself would overflow the stack. Only a
+    // trie that is verified to be a bounded tree is handed to it.
+    if macho_export_trie_is_tree(m, bytes) {
+        for export in m
+            .exports()
+            .map_err(|e| HexloraError::Malformed(e.to_string()))?
         {
-            a.symbols.push(SymbolInfo {
-                name: name.into(),
-                address: Some(nlist.n_value),
+            a.exports.push(SymbolInfo {
+                name: export.name,
+                address: Some(export.offset),
                 library: None,
+                demangled: None,
             });
+        }
+    } else {
+        a.metadata.insert(
+            "Export trie".into(),
+            "Not read: it is cyclic, too deep, or runs past its bounds".into(),
+        );
+    }
+    // goblin's bind-opcode interpreter indexes the library list with ordinals
+    // taken from the file and panics on one that is out of range.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| m.imports())) {
+        Ok(imports) => {
+            for import in imports.map_err(|e| HexloraError::Malformed(e.to_string()))? {
+                a.imports.push(SymbolInfo {
+                    name: import.name.into(),
+                    address: Some(import.offset),
+                    library: Some(import.dylib.into()),
+                    demangled: None,
+                });
+            }
+        }
+        Err(_) => {
+            a.metadata.insert(
+                "Import bindings".into(),
+                "Not read: the binding opcodes are malformed".into(),
+            );
+        }
+    }
+    // The symbol count comes from the file. A damaged count of billions would
+    // otherwise spin through entries that all lie past the end of the data, so
+    // the walk stops after a long run of unreadable entries.
+    const MAX_SYMBOL_ENTRIES: usize = 10_000_000;
+    const MAX_CONSECUTIVE_UNREADABLE: usize = 65_536;
+    let mut unreadable = 0usize;
+    for symbol in m.symbols().take(MAX_SYMBOL_ENTRIES) {
+        match symbol {
+            Ok((name, nlist)) => {
+                unreadable = 0;
+                if !name.is_empty() {
+                    a.symbols.push(SymbolInfo {
+                        name: name.into(),
+                        address: Some(nlist.n_value),
+                        library: None,
+                        demangled: None,
+                    });
+                }
+            }
+            Err(_) => {
+                unreadable += 1;
+                if unreadable >= MAX_CONSECUTIVE_UNREADABLE {
+                    a.metadata.insert(
+                        "Symbol table".into(),
+                        "Truncated: the declared symbol count runs past the table".into(),
+                    );
+                    break;
+                }
+            }
         }
     }
     Ok(a)
+}
+
+/// Deepest export trie handed to the recursive parser.
+const MAX_EXPORT_TRIE_DEPTH: usize = 256;
+const MAX_EXPORT_TRIE_NODES: usize = 1_000_000;
+
+fn read_uleb128(bytes: &[u8], position: &mut usize) -> Option<u64> {
+    let mut value = 0u64;
+    let mut shift = 0u32;
+    loop {
+        let byte = *bytes.get(*position)?;
+        *position += 1;
+        if shift < 64 {
+            value |= u64::from(byte & 0x7f) << shift;
+        }
+        if byte & 0x80 == 0 {
+            return Some(value);
+        }
+        shift += 7;
+        if shift > 70 {
+            return None;
+        }
+    }
+}
+
+/// Checks that an export trie is a tree of bounded depth: every node is inside
+/// the trie, reached exactly once, and no deeper than the recursive parser can
+/// safely follow. A binary without a trie passes.
+fn macho_export_trie_is_tree(m: &goblin::mach::MachO<'_>, bytes: &[u8]) -> bool {
+    use goblin::mach::load_command::CommandVariant;
+    let range = m
+        .load_commands
+        .iter()
+        .find_map(|command| match &command.command {
+            CommandVariant::DyldInfo(info) | CommandVariant::DyldInfoOnly(info) => {
+                Some((info.export_off as usize, info.export_size as usize))
+            }
+            CommandVariant::DyldExportsTrie(trie) => {
+                Some((trie.dataoff as usize, trie.datasize as usize))
+            }
+            _ => None,
+        });
+    let Some((offset, size)) = range else {
+        return true;
+    };
+    if size == 0 {
+        return true;
+    }
+    let Some(trie) = offset
+        .checked_add(size)
+        .and_then(|end| bytes.get(offset..end))
+    else {
+        return false;
+    };
+    let mut visited = std::collections::HashSet::new();
+    // (node offset within the trie, depth)
+    let mut pending = vec![(0usize, 0usize)];
+    while let Some((node, depth)) = pending.pop() {
+        if depth > MAX_EXPORT_TRIE_DEPTH
+            || visited.len() >= MAX_EXPORT_TRIE_NODES
+            || !visited.insert(node)
+        {
+            return false;
+        }
+        let mut position = node;
+        let Some(terminal_size) = read_uleb128(trie, &mut position) else {
+            return false;
+        };
+        let Some(children_at) = usize::try_from(terminal_size)
+            .ok()
+            .and_then(|size| position.checked_add(size))
+        else {
+            return false;
+        };
+        position = children_at;
+        let Some(child_count) = read_uleb128(trie, &mut position) else {
+            return false;
+        };
+        for _ in 0..child_count {
+            // Each edge is a NUL-terminated label followed by the child's offset.
+            let Some(label_length) = trie
+                .get(position..)
+                .and_then(|rest| rest.iter().position(|byte| *byte == 0))
+            else {
+                return false;
+            };
+            position += label_length + 1;
+            let Some(child) = read_uleb128(trie, &mut position)
+                .and_then(|child| usize::try_from(child).ok())
+                .filter(|child| *child < trie.len())
+            else {
+                return false;
+            };
+            pending.push((child, depth + 1));
+        }
+    }
+    true
 }
 
 fn macho_version(value: u32) -> String {
@@ -1876,5 +2042,95 @@ mod tests {
             0x00, 0x46,
         ]);
         assert_eq!(detect_format(&lnk), FileFormat::Lnk);
+    }
+
+    #[test]
+    fn cyclic_macho_export_trie_is_refused_instead_of_overflowing_the_stack() {
+        use goblin::mach::load_command::CommandVariant;
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/binaries/fixture-universal.dylib");
+        let original = std::fs::read(path).expect("read Mach-O fixture");
+        let intact = analyze_binary(&original).expect("analyze intact fixture");
+        assert!(intact.slice_analyses.iter().all(|slice| {
+            slice.exports.iter().any(|e| e.name == "_exported_entry")
+                && !slice.metadata.contains_key("Export trie")
+        }));
+
+        // Replace each slice's trie root with a node whose only child is itself.
+        let mut damaged = original.clone();
+        let Object::Mach(goblin::mach::Mach::Fat(fat)) =
+            Object::parse(&original).expect("parse fixture")
+        else {
+            panic!("fixture is a universal Mach-O");
+        };
+        for (index, arch) in fat.iter_arches().enumerate() {
+            let arch = arch.expect("fat arch");
+            let goblin::mach::SingleArch::MachO(macho) = fat.get(index).expect("slice") else {
+                panic!("slice is a Mach-O");
+            };
+            let trie = macho
+                .load_commands
+                .iter()
+                .find_map(|command| match &command.command {
+                    CommandVariant::DyldInfo(info) | CommandVariant::DyldInfoOnly(info) => {
+                        Some(info.export_off as usize)
+                    }
+                    CommandVariant::DyldExportsTrie(trie) => Some(trie.dataoff as usize),
+                    _ => None,
+                })
+                .expect("fixture slice has an export trie");
+            let start = arch.offset as usize + trie;
+            // terminal size 0, one child, label "a", child offset 0 (the root).
+            damaged[start..start + 5].copy_from_slice(&[0, 1, b'a', 0, 0]);
+        }
+        let analysis = analyze_binary(&damaged).expect("damaged trie is not fatal");
+        assert_eq!(analysis.slice_analyses.len(), 2);
+        for slice in &analysis.slice_analyses {
+            assert!(slice.exports.is_empty());
+            assert!(slice.metadata.contains_key("Export trie"));
+            // Everything else about the slice is still reported.
+            assert!(!slice.sections.is_empty());
+        }
+    }
+
+    #[test]
+    fn inflated_macho_symbol_count_does_not_stall_analysis() {
+        use goblin::mach::load_command::CommandVariant;
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/binaries/fixture-universal.dylib");
+        let mut image = std::fs::read(path).expect("read Mach-O fixture");
+        let Object::Mach(goblin::mach::Mach::Fat(fat)) =
+            Object::parse(&image).expect("parse fixture")
+        else {
+            panic!("fixture is a universal Mach-O");
+        };
+        let mut patches = Vec::new();
+        for (index, arch) in fat.iter_arches().enumerate() {
+            let arch = arch.expect("fat arch");
+            let goblin::mach::SingleArch::MachO(macho) = fat.get(index).expect("slice") else {
+                panic!("slice is a Mach-O");
+            };
+            let symtab = macho
+                .load_commands
+                .iter()
+                .find(|command| matches!(command.command, CommandVariant::Symtab(_)))
+                .expect("fixture slice has a symbol table");
+            // `nsyms` is the fourth 32-bit field of LC_SYMTAB.
+            patches.push(arch.offset as usize + symtab.offset + 12);
+        }
+        for patch in patches {
+            image[patch..patch + 4].copy_from_slice(&u32::MAX.to_le_bytes());
+        }
+        let started = std::time::Instant::now();
+        let analysis = analyze_binary(&image).expect("an inflated count is not fatal");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "{:?}",
+            started.elapsed()
+        );
+        for slice in &analysis.slice_analyses {
+            assert!(slice.symbols.iter().any(|s| s.name == "_exported_entry"));
+            assert!(slice.metadata.contains_key("Symbol table"));
+        }
     }
 }

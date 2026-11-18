@@ -4,9 +4,14 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["yara"]
+# Local YARA rule scanning (`inspect --yara`).
+yara = ["hexlora-analysis/yara"]
+
 [dependencies]
 hexlora-core = { path = "../hexlora-core" }
-hexlora-analysis = { path = "../hexlora-analysis" }
+hexlora-analysis = { path = "../hexlora-analysis", default-features = false }
 hexlora-ios = { path = "../hexlora-ios" }
 hexlora-compare = { path = "../hexlora-compare" }
 hexlora-policy = { path = "../hexlora-policy" }

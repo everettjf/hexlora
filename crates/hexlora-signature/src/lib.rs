@@ -11,9 +11,13 @@ use std::{
 };
 use wait_timeout::ChildExt;
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const SIGNATURE_TIMEOUT: Duration = Duration::from_secs(30);
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const MAX_SIGNATURE_OUTPUT: u64 = 4 * 1024 * 1024;
 
+// Host verification shells out to codesign, which only exists on macOS.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 struct BoundedOutput {
     status: ExitStatus,
     stdout: Vec<u8>,
@@ -23,6 +27,7 @@ struct BoundedOutput {
     truncated: bool,
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn run_bounded(command: &mut Command, cancelled: &dyn Fn() -> bool) -> Option<BoundedOutput> {
     let mut child = command
         .stdout(Stdio::piped())
@@ -245,6 +250,7 @@ pub fn inspect_host_signature_with_cancel(
     None
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn unsigned() -> SignatureInfo {
     SignatureInfo {
         status: SignatureStatus::Unsigned,

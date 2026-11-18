@@ -1609,6 +1609,8 @@ pub fn resolve_dependencies(analysis: &mut BinaryAnalysis, artifact: &ArtifactNo
                 offset: None,
                 locator: None,
             }],
+            rule_id: None,
+            confidence: None,
         });
     }
 }
@@ -4299,6 +4301,8 @@ fn add_entropy_findings(a: &mut BinaryAnalysis) {
                     offset: Some(section.offset),
                     locator: None,
                 }],
+                rule_id: None,
+                confidence: None,
             });
         }
     }
@@ -4315,6 +4319,8 @@ fn add_signature_findings(a: &mut BinaryAnalysis) {
             title: "Unsigned executable".into(),
             description: "No host-verifiable code signature was found. Unsigned does not by itself imply malicious behavior.".into(),
             evidence: vec![],
+            rule_id: None,
+            confidence: None,
         });
     }
     if a.signature
@@ -4328,6 +4334,8 @@ fn add_signature_findings(a: &mut BinaryAnalysis) {
             description: "The host cryptographic signature verifier rejected this code object."
                 .into(),
             evidence: vec![],
+            rule_id: None,
+            confidence: None,
         });
     }
     if matches!(a.platform, Some(BinaryPlatform::MacOs))
@@ -4345,6 +4353,8 @@ fn add_signature_findings(a: &mut BinaryAnalysis) {
             description: "The host signature inspection did not report a Hardened Runtime version."
                 .into(),
             evidence: vec![],
+            rule_id: None,
+            confidence: None,
         });
     }
 }
@@ -4376,6 +4386,8 @@ fn add_findings(a: &mut BinaryAnalysis) {
                     offset: Some(s.offset),
                     locator: None,
                 }],
+                rule_id: None,
+                confidence: None,
             });
         }
     }
@@ -4388,6 +4400,8 @@ fn add_findings(a: &mut BinaryAnalysis) {
             description:
                 "Symbol or debug metadata is present and may reveal implementation details.".into(),
             evidence: vec![],
+            rule_id: None,
+            confidence: None,
         });
     }
     if a.metadata
@@ -4400,6 +4414,8 @@ fn add_findings(a: &mut BinaryAnalysis) {
             title: "Absolute RPATH".into(),
             description: "The binary contains an absolute runtime library search path.".into(),
             evidence: vec![],
+            rule_id: None,
+            confidence: None,
         });
     }
     if a.metadata
@@ -4412,6 +4428,8 @@ fn add_findings(a: &mut BinaryAnalysis) {
             title: "Executable ELF stack".into(),
             description: "The GNU_STACK program header requests an executable process stack. This weakens a common exploit mitigation.".into(),
             evidence: vec![],
+            rule_id: None,
+            confidence: None,
         });
     }
     if matches!(a.platform, Some(BinaryPlatform::Windows)) {
@@ -4430,10 +4448,61 @@ fn add_findings(a: &mut BinaryAnalysis) {
                     title: title.into(),
                     description: format!("The PE optional header does not advertise {key}."),
                     evidence: vec![],
+                    rule_id: None,
+                    confidence: None,
                 });
             }
         }
     }
+}
+
+/// Adds readable symbol names and import-based capabilities to an analysis.
+/// Both are derived from already-parsed tables, but demangling a large symbol
+/// table is not free, so this runs for the file being inspected rather than
+/// for every file touched by discovery or dependency resolution.
+pub fn enrich_triage(analysis: &mut BinaryAnalysis) {
+    hexlora_triage::demangle_analysis(analysis);
+    hexlora_triage::apply_capabilities(analysis, None);
+}
+
+/// Searches a file for the strings capability rules look for. One pass over
+/// the file, in ASCII and UTF-16LE.
+pub fn scan_capability_strings(
+    node: &ArtifactNode,
+    cancel: &CancellationToken,
+) -> Result<hexlora_triage::StringEvidence> {
+    let mut scanner = hexlora_triage::StringScanner::new();
+    ArtifactReader::open(node)?.visit_chunks(cancel, |chunk| scanner.feed(chunk))?;
+    Ok(scanner.finish())
+}
+
+/// Recomputes capabilities with string evidence from `scan_capability_strings`.
+pub fn apply_capability_strings(
+    analysis: &mut BinaryAnalysis,
+    strings: &hexlora_triage::StringEvidence,
+) {
+    hexlora_triage::apply_capabilities(analysis, Some(strings));
+}
+
+#[cfg(feature = "yara")]
+pub use hexlora_triage::yara::{YaraMatch, YaraRules, yara_findings};
+
+/// Scans one file with compiled YARA rules. The file is mapped or, for archive
+/// members, read under the same size limit as binary parsing.
+#[cfg(feature = "yara")]
+pub fn yara_scan_node(
+    node: &ArtifactNode,
+    rules: &YaraRules,
+    cancel: &CancellationToken,
+) -> Result<Vec<YaraMatch>> {
+    cancel.check()?;
+    with_node_bytes(node, |bytes| rules.scan(bytes))
+}
+
+/// Runs `work` over the complete contents of a file node without copying a
+/// file-system file into memory.
+pub fn with_node_bytes<T>(node: &ArtifactNode, work: impl FnOnce(&[u8]) -> Result<T>) -> Result<T> {
+    work(&code::open_node_bytes(node)?)
 }
 
 pub fn entropy(bytes: &[u8]) -> f64 {
@@ -5174,10 +5243,18 @@ impl AnalysisCache {
     }
 }
 
+pub mod code;
+pub use code::{CodeLine, CodeListing, CodeView, NodeBytes, open_node_bytes};
+pub use hexlora_disasm::{
+    Architecture, DEFAULT_LISTING_INSTRUCTIONS, EndReason, FlowKind, Function, FunctionSource,
+    Limits, MAX_LISTING_INSTRUCTIONS,
+};
+pub use hexlora_symbols::{DebugSymbolSummary, SymbolFormat};
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{io::Write, process::Command};
+    use std::io::Write;
     #[test]
     fn entropy_bounds() {
         assert_eq!(entropy(&[]), 0.0);
@@ -5782,7 +5859,7 @@ mod tests {
             b"<pkg-info identifier=\"dev.hexlora.test\"/>",
         )
         .expect("write XAR member");
-        let status = Command::new(xar)
+        let status = std::process::Command::new(xar)
             .current_dir(&root)
             .args(["-cf"])
             .arg(&package)

@@ -1,0 +1,17 @@
+[package]
+name = "hexlora-symbols"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hexlora-core = { path = "../hexlora-core" }
+goblin.workspace = true
+pdb2.workspace = true
+gimli.workspace = true
+flate2.workspace = true
+memmap2.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

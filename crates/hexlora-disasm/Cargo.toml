@@ -1,0 +1,13 @@
+[package]
+name = "hexlora-disasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hexlora-core = { path = "../hexlora-core" }
+goblin.workspace = true
+iced-x86.workspace = true
+yaxpeax-arch.workspace = true
+yaxpeax-arm.workspace = true
+serde.workspace = true

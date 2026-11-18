@@ -4,10 +4,19 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+# Local YARA rule scanning. The CLI and desktop app enable it by default.
+yara = ["hexlora-triage/yara"]
+
 [dependencies]
 hexlora-core = { path = "../hexlora-core" }
 hexlora-format = { path = "../hexlora-format" }
 hexlora-signature = { path = "../hexlora-signature" }
+hexlora-triage = { path = "../hexlora-triage" }
+hexlora-symbols = { path = "../hexlora-symbols" }
+hexlora-disasm = { path = "../hexlora-disasm" }
+serde.workspace = true
 udif.workspace = true
 tar.workspace = true
 apple-xar.workspace = true

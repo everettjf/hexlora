@@ -220,6 +220,31 @@ pub enum FindingCategory {
     PathSecurity,
     Metadata,
     Format,
+    /// Something the code is able to do, inferred from static evidence.
+    Capability,
+    /// A structural trait that suggests packing or protection.
+    Packing,
+    /// A user-supplied pattern rule (for example YARA) matched.
+    Pattern,
+}
+
+/// How strongly the static evidence supports a finding. Absent on findings
+/// that restate a parsed fact rather than infer something from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Confidence {
+    Low,
+    Medium,
+    High,
+}
+
+impl Confidence {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Low => "Low",
+            Self::Medium => "Medium",
+            Self::High => "High",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -249,6 +274,13 @@ pub enum EvidenceLocator {
         source: PathBuf,
         field: String,
     },
+    /// An address in the image's own address space: an RVA for PE, a virtual
+    /// address for Mach-O and ELF.
+    VirtualAddress {
+        path: PathBuf,
+        address: u64,
+        length: Option<u64>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -258,6 +290,85 @@ pub struct Finding {
     pub title: String,
     pub description: String,
     pub evidence: Vec<Evidence>,
+    /// Stable identifier policies use to enable, disable, override, or suppress
+    /// this finding. Older findings without one are identified by their title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<Confidence>,
+}
+
+impl Finding {
+    pub fn new(
+        severity: Severity,
+        category: FindingCategory,
+        title: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            severity,
+            category,
+            title: title.into(),
+            description: description.into(),
+            evidence: Vec::new(),
+            rule_id: None,
+            confidence: None,
+        }
+    }
+    pub fn with_rule(mut self, rule_id: impl Into<String>) -> Self {
+        self.rule_id = Some(rule_id.into());
+        self
+    }
+    pub fn with_confidence(mut self, confidence: Confidence) -> Self {
+        self.confidence = Some(confidence);
+        self
+    }
+    pub fn with_evidence(mut self, label: impl Into<String>, value: impl Into<String>) -> Self {
+        self.evidence.push(Evidence {
+            label: label.into(),
+            value: value.into(),
+            offset: None,
+            locator: None,
+        });
+        self
+    }
+    pub fn with_evidence_at(
+        mut self,
+        label: impl Into<String>,
+        value: impl Into<String>,
+        offset: u64,
+    ) -> Self {
+        self.evidence.push(Evidence {
+            label: label.into(),
+            value: value.into(),
+            offset: Some(offset),
+            locator: None,
+        });
+        self
+    }
+    /// The identifier policies match: the explicit rule, or one derived from
+    /// the title for findings that predate rule identifiers.
+    pub fn policy_rule_id(&self) -> String {
+        self.rule_id.clone().unwrap_or_else(|| {
+            format!(
+                "analysis.{}",
+                self.title.to_ascii_lowercase().replace(' ', "-")
+            )
+        })
+    }
+}
+
+/// One thing a binary appears able to do, with the imports and strings that
+/// suggest it. A capability is not proof the behaviour occurs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Capability {
+    pub id: String,
+    pub group: String,
+    pub name: String,
+    pub description: String,
+    pub severity: Severity,
+    pub confidence: Confidence,
+    pub evidence: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -325,6 +436,16 @@ pub struct SymbolInfo {
     pub name: String,
     pub address: Option<u64>,
     pub library: Option<String>,
+    /// Human-readable form of a mangled C++, Rust, or MSVC name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub demangled: Option<String>,
+}
+
+impl SymbolInfo {
+    /// The readable name when one exists, otherwise the raw symbol.
+    pub fn display_name(&self) -> &str {
+        self.demangled.as_deref().unwrap_or(&self.name)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -385,6 +506,8 @@ pub struct BinaryAnalysis {
     pub metadata: IndexMap<String, String>,
     pub signature: Option<SignatureInfo>,
     pub findings: Vec<Finding>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<Capability>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
