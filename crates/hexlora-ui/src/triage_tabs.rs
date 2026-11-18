@@ -60,6 +60,14 @@ pub(super) struct YaraState {
     /// one that another task replaced.
     generation: u64,
     summary: SharedString,
+    /// Rules to scan with as soon as the artifact being opened is ready.
+    queued: Option<PathBuf>,
+}
+
+impl YaraState {
+    pub(super) fn take_queued(&mut self) -> Option<PathBuf> {
+        self.queued.take()
+    }
 }
 
 /// Something a selected table row can open.
@@ -99,7 +107,7 @@ impl RowAction {
                     cx.notify();
                 })),
             Self::OpenFile(path) => toolbar_button("row-open-file", "Open File")
-                .on_click(cx.listener(move |this, _, _, cx| this.navigate_to_evidence(&path, cx))),
+                .on_click(cx.listener(move |this, _, _, cx| this.open_matched_file(&path, cx))),
         }
         .into_any_element()
     }
@@ -500,6 +508,20 @@ impl HexloraApp {
                 this.load_code_view_at_pending(cx);
             },
         );
+    }
+
+    /// The address an external tool should open at: the selected line of the
+    /// listing, or its start, while the Disassembly tab is showing one.
+    pub(super) fn handoff_address(&self) -> Option<u64> {
+        if self.tab != InspectorTab::Disassembly || self.code.show_functions {
+            return None;
+        }
+        let listing = self.code.listing.as_ref()?;
+        self.row_selection
+            .as_deref()
+            .and_then(|selection| self.selected_code_line(selection))
+            .map(|line| line.address)
+            .or(Some(listing.start))
     }
 
     /// The listing line a selected Disassembly row stands for.
@@ -1003,6 +1025,54 @@ impl HexloraApp {
             anyhow::Ok(())
         })
         .detach();
+    }
+
+    /// Remembers rules to scan with once the artifact being opened is ready.
+    pub(super) fn queue_yara_scan(&mut self, rules: Option<PathBuf>) {
+        self.yara.queued = rules;
+    }
+
+    /// Starts the queued scan, if there is one and nothing else is running.
+    pub(super) fn start_queued_yara_scan(&mut self, cx: &mut Context<Self>) {
+        if !self.loading
+            && let Some(rules) = self.yara.queued.take()
+        {
+            self.scan_yara(rules, cx);
+        }
+    }
+
+    /// Selects the file a match was found in, expanding the tree down to it.
+    fn open_matched_file(&mut self, path: &std::path::Path, cx: &mut Context<Self>) {
+        fn locate(
+            node: &ArtifactNode,
+            path: &std::path::Path,
+            ancestors: &mut Vec<uuid::Uuid>,
+        ) -> Option<uuid::Uuid> {
+            if node.path == path && node.is_file() {
+                return Some(node.id);
+            }
+            let found = node
+                .children
+                .iter()
+                .find_map(|child| locate(child, path, ancestors))?;
+            ancestors.push(node.id);
+            Some(found)
+        }
+        let mut ancestors = Vec::new();
+        let found = self
+            .artifact
+            .as_deref()
+            .and_then(|root| locate(root, path, &mut ancestors));
+        match found {
+            Some(id) => {
+                self.expanded_nodes.extend(ancestors);
+                self.select(id, cx);
+            }
+            None => {
+                self.error = Some(format!("{} is no longer in the tree", path.display()).into());
+                cx.notify();
+            }
+        }
     }
 
     /// Whether the YARA tab has anything to show.

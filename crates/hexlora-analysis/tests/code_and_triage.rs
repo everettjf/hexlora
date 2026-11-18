@@ -231,3 +231,43 @@ fn universal_binary_slices_open_independently() {
     architectures.sort_unstable();
     assert_eq!(architectures, ["arm64", "x86_64"]);
 }
+
+#[test]
+fn a_500_mib_binary_opens_for_triage_and_disassembly_without_reading_it_all() {
+    // A sparse file: the fixture's headers and code followed by 500 MiB of
+    // zero overlay. Only what is touched is ever read from disk.
+    const SIZE: u64 = 500 * 1024 * 1024;
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path = directory.path().join("large.exe");
+    std::fs::copy(fixtures().join("fixture-x64.exe"), &path).expect("copy fixture");
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .and_then(|file| file.set_len(SIZE))
+        .expect("extend fixture");
+    let cancel = CancellationToken::default();
+
+    let started = std::time::Instant::now();
+    let node = open_artifact(&path, &cancel).expect("open large binary");
+    assert_eq!(node.size, SIZE);
+    let mut analysis = analyze_node(&node).expect("analyze").expect("binary");
+    enrich_triage(&mut analysis);
+    let view = CodeView::open(&node, None, None, &cancel).expect("open code view");
+    let listing = view
+        .listing_at("entry", Limits::default())
+        .expect("list the entry point");
+    let elapsed = started.elapsed();
+
+    assert_eq!(analysis.capabilities[0].id, "injection.remote-thread");
+    assert_eq!(
+        analysis.metadata.get("Overlay size").map(String::as_str),
+        Some((SIZE - 3072).to_string().as_str())
+    );
+    assert_eq!(listing.lines.len(), 10);
+    // Structural analysis and the listing must not scale with file size. The
+    // bound is generous for slow CI disks; locally this takes milliseconds.
+    assert!(
+        elapsed < std::time::Duration::from_secs(5),
+        "opening took {elapsed:?}"
+    );
+}

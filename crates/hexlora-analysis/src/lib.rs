@@ -5254,7 +5254,7 @@ pub use hexlora_symbols::{DebugSymbolSummary, SymbolFormat};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{io::Write, process::Command};
+    use std::io::Write;
     #[test]
     fn entropy_bounds() {
         assert_eq!(entropy(&[]), 0.0);
@@ -5859,7 +5859,7 @@ mod tests {
             b"<pkg-info identifier=\"dev.hexlora.test\"/>",
         )
         .expect("write XAR member");
-        let status = Command::new(xar)
+        let status = std::process::Command::new(xar)
             .current_dir(&root)
             .args(["-cf"])
             .arg(&package)

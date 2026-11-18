@@ -11,6 +11,8 @@ command on every push and pull request, then builds and launches a real macOS ap
 | Symbol demangling and capabilities | Itanium, Rust, and MSVC names; rule table integrity; import and string evidence; platform separation; chunk-spanning string search |
 | YARA rules | Rule files and directories, namespaces, metadata, archive members, compile errors, optional-feature build |
 | Debug symbols | PDB identity matching and refusal, embedded DWARF for x86-64 and AArch64, cancellation, truncated and damaged symbol files |
+| External tool handoff | Address arguments per tool, the IDA jump script, and a real objdump run limited to a handoff address |
+| Large binaries | A 500 MiB binary opens for triage and disassembly within a fixed time bound |
 | Disassembly | Function discovery for PE, ELF, and universal Mach-O; x86-64 and AArch64 listings; import, stub, and string naming; limits; damaged images; the running test binary |
 | Archives and untrusted input | Traversal, symlinks, depth/size/ratio limits, CRC corruption, cancellation |
 | Performance regressions | Single-pass ZIP hashing, chunk cancellation, bounded UTF-16 runs, source-aware cache invalidation, wide directory trees, string filter invalidation |

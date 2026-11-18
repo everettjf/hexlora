@@ -190,6 +190,26 @@ fn take_startup_path() -> Option<PathBuf> {
         .take()
 }
 
+/// YARA rules named on the command line (`Hexlora <artifact> --yara <rules>`),
+/// scanned once the artifact has opened.
+fn take_startup_yara_rules() -> Option<PathBuf> {
+    static RULES: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
+    RULES
+        .get_or_init(|| {
+            let mut arguments = std::env::args_os().skip(2);
+            let mut rules = None;
+            while let Some(argument) = arguments.next() {
+                if argument == "--yara" {
+                    rules = arguments.next().map(PathBuf::from);
+                }
+            }
+            Mutex::new(rules.filter(|path| path.exists()))
+        })
+        .lock()
+        .ok()?
+        .take()
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum InspectorTab {
     Search,
@@ -835,7 +855,9 @@ impl HexloraApp {
                         this.analysis = None;
                         this.summary = None;
                         // Matches and listings describe the previous artifact.
+                        let queued = this.yara.take_queued();
                         this.yara = triage_tabs::YaraState::default();
+                        this.queue_yara_scan(queued);
                         if this.tab == InspectorTab::Yara {
                             this.tab = InspectorTab::Overview;
                         }
@@ -879,10 +901,13 @@ impl HexloraApp {
                             .is_some_and(ArtifactNode::is_file);
                         if should_analyze {
                             this.select(id, cx);
-                        } else if let Some(tab) = this.restore_tab.take()
-                            && this.tabs().contains(&tab)
-                        {
-                            this.set_tab(tab, cx);
+                        } else {
+                            if let Some(tab) = this.restore_tab.take()
+                                && this.tabs().contains(&tab)
+                            {
+                                this.set_tab(tab, cx);
+                            }
+                            this.start_queued_yara_scan(cx);
                         }
                     }
                     Err(e) => {
@@ -989,6 +1014,7 @@ impl HexloraApp {
                         {
                             this.set_tab(tab, cx);
                         }
+                        this.start_queued_yara_scan(cx);
                     }
                     Err(e) => {
                         this.error = Some(e.to_string().into());
@@ -2101,6 +2127,8 @@ impl HexloraApp {
             return;
         };
         let id = id.to_string();
+        // From the Disassembly tab a tool is handed the address being read.
+        let address = self.handoff_address();
         self.cancellation.cancel();
         self.cancellation = CancellationToken::default();
         let cancellation = self.cancellation.clone();
@@ -2113,22 +2141,28 @@ impl HexloraApp {
                     let tool = tools.get(&id).ok_or_else(|| {
                         hexlora_core::HexloraError::Malformed("tool disappeared".into())
                     })?;
-                    if let Some(output) =
-                        tool.capture_controlled(&node, std::time::Duration::from_secs(60), &|| {
-                            cancellation.check().is_err()
-                        })?
-                    {
-                        Ok::<_, hexlora_core::HexloraError>((tool.display_name(), Some(output)))
+                    let positioned = address.filter(|_| tool.accepts_address());
+                    if let Some(output) = tool.capture_at(
+                        &node,
+                        address,
+                        std::time::Duration::from_secs(60),
+                        &|| cancellation.check().is_err(),
+                    )? {
+                        Ok::<_, hexlora_core::HexloraError>((
+                            tool.display_name(),
+                            Some(output),
+                            positioned,
+                        ))
                     } else {
-                        tool.launch(&node)?;
-                        Ok((tool.display_name(), None))
+                        tool.launch_at(&node, address)?;
+                        Ok((tool.display_name(), None, positioned))
                     }
                 })
                 .await;
             this.update(cx, |this, cx| {
                 this.loading = false;
                 match result {
-                    Ok((name, Some(output))) => {
+                    Ok((name, Some(output), positioned)) => {
                         let mut text = output.stdout;
                         if !output.stderr.is_empty() {
                             text.push_str("\n--- stderr ---\n");
@@ -2145,16 +2179,38 @@ impl HexloraApp {
                         }
                         this.tool_output = Some((name.into(), text.into()));
                         this.status = format!(
-                            "{name} finished {}",
+                            "{name} finished {}{}",
                             if output.success {
                                 "successfully"
                             } else {
                                 "with errors"
-                            }
+                            },
+                            positioned
+                                .map(|address| format!(" · code at 0x{address:x}"))
+                                .unwrap_or_default()
                         )
                         .into();
                     }
-                    Ok((name, None)) => this.status = format!("Launched {name}").into(),
+                    Ok((name, None, Some(address))) => {
+                        this.status = format!("Launched {name} at 0x{address:x}").into();
+                    }
+                    Ok((name, None, None)) => {
+                        // A tool that takes no address on its command line
+                        // still gets it: on the clipboard, ready for its
+                        // go-to-address command.
+                        this.status = match address {
+                            Some(address) => {
+                                cx.write_to_clipboard(ClipboardItem::new_string(format!(
+                                    "0x{address:x}"
+                                )));
+                                format!(
+                                    "Launched {name} · 0x{address:x} copied for its go-to-address command"
+                                )
+                            }
+                            None => format!("Launched {name}"),
+                        }
+                        .into();
+                    }
                     Err(error) => this.error = Some(error.to_string().into()),
                 }
                 cx.notify();
@@ -7677,7 +7733,10 @@ fn open_hexlora_window(cx: &mut App) {
             |window, cx| {
                 let view = cx.new(|cx| HexloraApp::new(window, cx));
                 if let Some(path) = take_startup_path() {
-                    view.update(cx, |this, cx| this.load(path, cx));
+                    view.update(cx, |this, cx| {
+                        this.queue_yara_scan(take_startup_yara_rules());
+                        this.load(path, cx);
+                    });
                 }
                 cx.global_mut::<WindowViews>()
                     .0
@@ -7729,6 +7788,7 @@ fn main() {
             KeyBinding::new("cmd-shift-o", OpenArtifact, None),
             KeyBinding::new("cmd-alt-o", OpenWorkspace, None),
             KeyBinding::new("cmd-alt-p", OpenPolicy, None),
+            KeyBinding::new("cmd-shift-y", ScanYaraRules, None),
             KeyBinding::new("cmd-shift-c", CompareArtifacts, None),
             KeyBinding::new("cmd-s", SaveWorkspace, None),
             KeyBinding::new("cmd-f", FocusSearch, None),

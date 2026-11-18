@@ -77,13 +77,13 @@ Drag a file, folder, application, package, or workspace into the window — or u
 - **Tables** size their columns to the content. Click any row to read every value in full and copy it; when a table is wider than the panel it scrolls sideways, and **More columns →** jumps to the columns past the edge.
 - **Disassembly** lists the functions Hexlora can find in a PE, ELF, or Mach-O binary (x86, x86-64, arm64) and shows a linear listing with call targets, imports, and referenced strings named. Click a function to list it, click a line to follow its target or see its bytes in Hex, and use **Disassemble** on a Symbols or Exports row to jump straight there. A PDB, dSYM, or `.debug` file next to the binary is picked up automatically when it matches; **Load Symbols…** chooses another. Nothing is downloaded.
 - **Capabilities** shows what a binary appears able to do — inject into other processes, persist, capture input, talk to the network, map physical memory from a driver — with the imports and strings behind each inference and a confidence. It is evidence for review, not a verdict.
-- **File → Scan with YARA Rules** runs a rule file or folder you choose against every file in the artifact, archive members included, and lists the matches in a YARA tab.
+- **File → Scan with YARA Rules** (`⇧⌘Y`) runs a rule file or folder you choose against every file in the artifact, archive members included, and lists the matches in a YARA tab. Launching with `Hexlora <artifact> --yara <rules>` runs the scan as soon as the artifact opens.
 - **Search** (`⌘F`) spans names, metadata, symbols, and strings across the whole artifact, and accepts hexadecimal byte queries.
 - **File → Compare Artifacts** (`⇧⌘C`) diffs two artifacts by exact content identity: added, removed, modified, and moved files, size growth by directory and type, duplicates, and IPA privacy, signing, and entitlement changes.
 - **Release Policy** (`⌥⌘P`) applies the same versioned policy file the CLI uses and lists violations in the Policy tab.
 - **Reports** — **File → Export Markdown Report**, **Export PDF Report**, and **Export Visual Report** (an SVG dashboard) write to a location you choose. Nothing is uploaded.
 - **Workspaces** (`⌘S` to save, `⌥⌘O` to open) keep the artifact path, selected view, bookmarks, notes, and cached results.
-- **External Tools** lists compatible tools installed on your machine and launches them only when you ask.
+- **External Tools** lists compatible tools installed on your machine and launches them only when you ask. Launched from the Disassembly tab, a tool is handed the address you are reading: radare2 opens at it, IDA jumps to it once its analysis finishes, and objdump disassembles just that code. Tools that take no address on their command line, such as Ghidra, Binary Ninja, and Hopper, are opened on the file with the address copied to the clipboard for their go-to-address command.
 
 Three layout presets — **Standard**, **Focus**, and **Analysis** — are in the View menu along with a high-contrast mode. `⌘N` opens an independent window. The interface is English-only.
 
