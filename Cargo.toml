@@ -11,6 +11,9 @@ members = [
     "crates/hexlora-windows",
     "crates/hexlora-linux",
     "crates/hexlora-signature",
+    "crates/hexlora-triage",
+    "crates/hexlora-symbols",
+    "crates/hexlora-disasm",
     "crates/hexlora-tools",
     "crates/hexlora-cli",
     "crates/hexlora-ui",
@@ -58,6 +61,16 @@ tempfile = "3.20"
 xz2 = "0.1"
 zstd = "0.13"
 crc32fast = "1.4"
+aho-corasick = "1.1"
+rustc-demangle = "0.1"
+cpp_demangle = "0.6"
+msvc-demangler = "0.11"
+boreal = { version = "1.4", default-features = false, features = ["hash", "object"] }
+pdb2 = "0.11"
+gimli = { version = "0.34", default-features = false, features = ["read", "std"] }
+iced-x86 = { version = "1.22", default-features = false, features = ["std", "decoder", "intel", "instr_info"] }
+yaxpeax-arch = { version = "0.3", default-features = false, features = ["std"] }
+yaxpeax-arm = { version = "0.5", default-features = false, features = ["std"] }
 
 [profile.release]
 lto = "thin"

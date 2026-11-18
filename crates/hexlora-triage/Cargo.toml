@@ -1,0 +1,23 @@
+[package]
+name = "hexlora-triage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Static triage: symbol demangling, capability inference, and pattern rules"
+
+[features]
+default = []
+# Local YARA rule scanning through the pure-Rust `boreal` engine.
+yara = ["dep:boreal"]
+
+[dependencies]
+hexlora-core = { path = "../hexlora-core" }
+aho-corasick.workspace = true
+rustc-demangle.workspace = true
+cpp_demangle.workspace = true
+msvc-demangler.workspace = true
+boreal = { workspace = true, optional = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+tempfile.workspace = true

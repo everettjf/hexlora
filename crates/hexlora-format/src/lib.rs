@@ -4,6 +4,8 @@ use goblin::Object;
 use hexlora_core::*;
 use std::path::Path;
 
+mod pe_triage;
+
 pub const MAX_PARSE_BYTES: u64 = 512 * 1024 * 1024;
 
 pub struct AnalysisInput<'a> {
@@ -141,7 +143,7 @@ impl BinaryAnalyzer for PeAnalyzer {
 
     fn analyze(&self, input: &AnalysisInput<'_>) -> Result<BinaryAnalysis> {
         match Object::parse(input.bytes).map_err(|e| HexloraError::Malformed(e.to_string()))? {
-            Object::PE(pe) => analyze_pe(&pe),
+            Object::PE(pe) => analyze_pe(&pe, input.bytes),
             _ => Err(HexloraError::Malformed("not a PE binary".into())),
         }
     }
@@ -371,7 +373,7 @@ pub fn analyze_binary(bytes: &[u8]) -> Result<BinaryAnalysis> {
     })
 }
 
-fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
+fn analyze_pe(pe: &goblin::pe::PE<'_>, bytes: &[u8]) -> Result<BinaryAnalysis> {
     let mut a = BinaryAnalysis {
         format: Some(FileFormat::Pe),
         platform: Some(BinaryPlatform::Windows),
@@ -724,6 +726,23 @@ fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
             String::from_utf8_lossy(filename).into_owned(),
         );
         a.metadata.insert("PDB age".into(), pdb.age.to_string());
+        // The GUID is stored in its mixed-endian on-disk layout.
+        let guid = pdb.signature;
+        a.metadata.insert(
+            "PDB GUID".into(),
+            format!(
+                "{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{}",
+                u32::from_le_bytes([guid[0], guid[1], guid[2], guid[3]]),
+                u16::from_le_bytes([guid[4], guid[5]]),
+                u16::from_le_bytes([guid[6], guid[7]]),
+                guid[8],
+                guid[9],
+                guid[10..16]
+                    .iter()
+                    .map(|byte| format!("{byte:02X}"))
+                    .collect::<String>()
+            ),
+        );
         a.metadata.insert(
             "Compiler hint".into(),
             "Microsoft/LLVM CodeView (PDB)".into(),
@@ -783,6 +802,7 @@ fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
             name: import.name.to_string(),
             address: Some(import.rva as u64),
             library: Some(import.dll.to_string()),
+            demangled: None,
         });
     }
     for export in &pe.exports {
@@ -790,6 +810,7 @@ fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
             name: export.name.unwrap_or("<ordinal>").to_string(),
             address: Some(export.rva as u64),
             library: None,
+            demangled: None,
         });
     }
     a.dependencies
@@ -798,6 +819,7 @@ fn analyze_pe(pe: &goblin::pe::PE<'_>) -> Result<BinaryAnalysis> {
             path: None,
             status: DependencyStatus::Unknown,
         }));
+    pe_triage::enrich(pe, bytes, &mut a);
     Ok(a)
 }
 
@@ -1155,6 +1177,7 @@ fn analyze_elf(elf: &goblin::elf::Elf<'_>, bytes: &[u8]) -> Result<BinaryAnalysi
                 name: name.into(),
                 address: Some(sym.st_value),
                 library: None,
+                demangled: None,
             };
             if sym.st_shndx == 0 {
                 a.imports.push(item);
@@ -1173,6 +1196,7 @@ fn analyze_elf(elf: &goblin::elf::Elf<'_>, bytes: &[u8]) -> Result<BinaryAnalysi
                 name: name.into(),
                 address: Some(sym.st_value),
                 library: None,
+                demangled: None,
             });
         }
     }
@@ -1515,6 +1539,7 @@ fn analyze_macho_binary(m: &goblin::mach::MachO<'_>) -> Result<BinaryAnalysis> {
             name: export.name,
             address: Some(export.offset),
             library: None,
+            demangled: None,
         });
     }
     for import in m
@@ -1525,6 +1550,7 @@ fn analyze_macho_binary(m: &goblin::mach::MachO<'_>) -> Result<BinaryAnalysis> {
             name: import.name.into(),
             address: Some(import.offset),
             library: Some(import.dylib.into()),
+            demangled: None,
         });
     }
     for symbol in m.symbols() {
@@ -1535,6 +1561,7 @@ fn analyze_macho_binary(m: &goblin::mach::MachO<'_>) -> Result<BinaryAnalysis> {
                 name: name.into(),
                 address: Some(nlist.n_value),
                 library: None,
+                demangled: None,
             });
         }
     }

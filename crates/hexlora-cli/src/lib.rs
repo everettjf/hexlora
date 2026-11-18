@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use hexlora_analysis::{
-    CancellationToken, HashOptions, analyze_node, annotate_string_locations,
-    apply_signature_analysis, build_dependency_graph, enrich_analysis_entropy,
+    CancellationToken, CodeListing, CodeView, DebugSymbolSummary, FunctionSource, HashOptions,
+    Limits, analyze_node, annotate_string_locations, apply_capability_strings,
+    apply_signature_analysis, build_dependency_graph, enrich_analysis_entropy, enrich_triage,
     extract_strings_node_cancellable, hash_node, inspect_metadata, inspect_signature_cancellable,
-    open_artifact, resolve_dependencies,
+    open_artifact, resolve_dependencies, scan_capability_strings,
 };
 use hexlora_android::{AndroidAuditReportV1, audit_apk, is_apk};
 use hexlora_compare::{CompareReportV1, compare_artifacts};
@@ -15,8 +16,8 @@ use hexlora_core::{
 use hexlora_ios::{IpaAuditReportV1, IpaViewCompatibleReport, audit_ipa, ipa_view_compatible};
 use hexlora_linux::{DebianReportV1, audit_deb, is_deb};
 use hexlora_policy::{
-    PolicyViolation, ReleasePolicyV1, evaluate_android, evaluate_compare, evaluate_generic,
-    evaluate_ipa, evaluate_linux, evaluate_windows,
+    PolicyViolation, ReleasePolicyV1, evaluate_android, evaluate_capabilities, evaluate_compare,
+    evaluate_generic, evaluate_ipa, evaluate_linux, evaluate_windows,
 };
 use hexlora_windows::{WindowsPackageReportV1, audit_msix, is_msix};
 use indexmap::IndexMap;
@@ -47,6 +48,56 @@ enum Command {
     Inspect(InspectArgs),
     /// Compare two artifacts and emit deterministic file, size, and IPA semantic differences.
     Compare(CompareArgs),
+    /// List functions or disassemble code from a PE, ELF, or Mach-O binary.
+    Disasm(DisasmArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DisasmArgs {
+    /// Binary to disassemble, or an application or package that contains it.
+    pub path: PathBuf,
+
+    /// Where to start: `entry`, a hexadecimal address such as 0x401000, or a
+    /// function name. Repeat for several listings. Defaults to `entry`.
+    #[arg(long = "at", value_name = "TARGET")]
+    pub targets: Vec<String>,
+
+    /// Select the binary inside an application or package, by name or path suffix.
+    #[arg(long, value_name = "NAME")]
+    pub file: Option<String>,
+
+    /// Architecture slice of a universal Mach-O, by index or name (arm64, x86_64).
+    #[arg(long, value_name = "SLICE")]
+    pub slice: Option<String>,
+
+    /// Most instructions per listing.
+    #[arg(long, default_value_t = 200, value_parser = parse_instruction_count)]
+    pub count: usize,
+
+    /// List the discovered functions instead of disassembling.
+    #[arg(long)]
+    pub functions: bool,
+
+    /// Most functions listed by --functions.
+    #[arg(long, default_value_t = 10_000, value_parser = parse_max_functions)]
+    pub max_functions: usize,
+
+    /// PDB, dSYM, or debug file with symbols for this binary. Without it,
+    /// embedded DWARF and a matching file beside the binary are used.
+    #[arg(long, value_name = "FILE")]
+    pub symbols: Option<PathBuf>,
+
+    /// Emit JSON instead of text.
+    #[arg(long)]
+    pub json: bool,
+
+    /// Pretty-print JSON output.
+    #[arg(long)]
+    pub pretty: bool,
+
+    /// Write to this file instead of stdout.
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -121,6 +172,25 @@ pub struct InspectArgs {
     #[arg(long, default_value_t = 10_000, value_parser = parse_max_strings)]
     pub max_strings: usize,
 
+    /// Search each binary for the strings capability rules look for. Without
+    /// this, capabilities are inferred from imports alone.
+    #[arg(long)]
+    pub capabilities: bool,
+
+    /// List the functions discovered in each binary, with debug symbols when
+    /// they are embedded or sit beside it.
+    #[arg(long)]
+    pub functions: bool,
+
+    /// Maximum functions listed per binary.
+    #[arg(long, default_value_t = 10_000, value_parser = parse_max_functions)]
+    pub max_functions: usize,
+
+    /// Scan every file with the YARA rules in this file or directory.
+    #[cfg(feature = "yara")]
+    #[arg(long, value_name = "RULES")]
+    pub yara: Option<PathBuf>,
+
     /// Exit with status 2 if this severity or higher is found.
     #[arg(long, value_enum)]
     pub fail_on: Option<SeverityThreshold>,
@@ -179,6 +249,14 @@ fn parse_max_strings(value: &str) -> Result<usize, String> {
     parse_bounded_usize(value, 1, 1_000_000)
 }
 
+fn parse_max_functions(value: &str) -> Result<usize, String> {
+    parse_bounded_usize(value, 1, hexlora_analysis::code::MAX_REPORTED_FUNCTIONS)
+}
+
+fn parse_instruction_count(value: &str) -> Result<usize, String> {
+    parse_bounded_usize(value, 1, hexlora_analysis::MAX_LISTING_INSTRUCTIONS)
+}
+
 #[derive(Debug, Serialize)]
 pub struct InspectionReport {
     pub schema_version: u32,
@@ -219,7 +297,70 @@ pub struct FileReport {
     pub analysis: Option<BinaryAnalysis>,
     pub metadata: IndexMap<String, String>,
     pub strings: Option<Vec<ReportString>>,
+    /// Discovered functions, one entry per architecture slice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<Vec<ReportCode>>,
+    /// YARA rules that matched this file.
+    #[cfg(feature = "yara")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub yara: Option<Vec<hexlora_analysis::YaraMatch>>,
     pub errors: Vec<ReportError>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReportCode {
+    pub architecture: &'static str,
+    pub image_base: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<u64>,
+    /// Functions discovered, which can exceed the number listed.
+    pub function_count: usize,
+    /// Set when discovery or the listing limit left functions out.
+    pub functions_truncated: bool,
+    pub functions: Vec<ReportFunction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug_symbols: Option<DebugSymbolSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug_symbols_error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReportFunction {
+    pub address: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    pub name: String,
+    /// The name as the file spells it, when it differs from `name`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_name: Option<String>,
+    pub source: FunctionSource,
+}
+
+fn report_code(view: &CodeView, max_functions: usize) -> ReportCode {
+    let functions = view.functions();
+    ReportCode {
+        architecture: view.program.architecture.label(),
+        image_base: view.program.image_base,
+        entry: view.program.entry,
+        function_count: functions.len(),
+        functions_truncated: view.program.functions_truncated || functions.len() > max_functions,
+        functions: functions
+            .iter()
+            .take(max_functions)
+            .map(|function| {
+                let name = function.display_name();
+                ReportFunction {
+                    address: function.address,
+                    size: function.size,
+                    raw_name: function.name.clone().filter(|raw| *raw != name),
+                    name,
+                    source: function.source,
+                }
+            })
+            .collect(),
+        debug_symbols: view.symbol_summary(),
+        debug_symbols_error: view.symbol_error.clone(),
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -258,7 +399,242 @@ pub fn run() -> u8 {
     match cli.command {
         Command::Inspect(args) => run_inspect(args),
         Command::Compare(args) => run_compare(args),
+        Command::Disasm(args) => run_disasm(args),
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct DisasmReport {
+    pub schema_version: u32,
+    pub path: PathBuf,
+    #[serde(flatten)]
+    pub code: ReportCode,
+    pub listings: Vec<CodeListing>,
+}
+
+fn run_disasm(args: DisasmArgs) -> u8 {
+    let cancellation = CancellationToken::default();
+    let signal_token = cancellation.clone();
+    if let Err(error) = ctrlc::set_handler(move || signal_token.cancel()) {
+        eprintln!("warning: could not install Ctrl-C handler: {error}");
+    }
+    let report = match disassemble(&args, &cancellation) {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!("hexlora-cli: {error}");
+            return if cancellation.is_cancelled() { 4 } else { 1 };
+        }
+    };
+    let written = if args.json {
+        write_json(&report, args.output.as_deref(), args.pretty)
+    } else {
+        write_bytes(
+            render_disasm_text(&report, args.functions).trim_end(),
+            args.output.as_deref(),
+        )
+    };
+    match written {
+        Ok(()) => 0,
+        Err(error) => {
+            eprintln!("hexlora-cli: {error}");
+            1
+        }
+    }
+}
+
+/// Picks the one binary a `disasm` invocation is about.
+fn select_binary<'a>(
+    artifact: &'a ArtifactNode,
+    wanted: Option<&str>,
+) -> hexlora_core::Result<&'a ArtifactNode> {
+    use hexlora_core::FileFormat;
+    let binaries: Vec<&ArtifactNode> = artifact
+        .files()
+        .filter(|node| {
+            matches!(
+                node.format,
+                Some(FileFormat::Pe | FileFormat::MachO | FileFormat::FatMachO | FileFormat::Elf)
+            )
+        })
+        .collect();
+    let malformed = hexlora_core::HexloraError::Malformed;
+    match wanted {
+        Some(wanted) => {
+            let normalized = wanted.replace('\\', "/");
+            let mut matches = binaries.iter().copied().filter(|node| {
+                node.name == wanted
+                    || node
+                        .path
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                        .ends_with(&normalized)
+            });
+            let first = matches.next().ok_or_else(|| {
+                malformed(format!(
+                    "no binary named \"{wanted}\" in {}",
+                    artifact.path.display()
+                ))
+            })?;
+            if matches.next().is_some() {
+                return Err(malformed(format!(
+                    "\"{wanted}\" matches more than one binary; give a longer path suffix"
+                )));
+            }
+            Ok(first)
+        }
+        None => match binaries.as_slice() {
+            [] => Err(malformed(format!(
+                "{} contains no PE, ELF, or Mach-O binary",
+                artifact.path.display()
+            ))),
+            [only] => Ok(only),
+            many => Err(malformed(format!(
+                "{} contains {} binaries; choose one with --file, for example --file {}",
+                artifact.path.display(),
+                many.len(),
+                many[0].name
+            ))),
+        },
+    }
+}
+
+/// Resolves `--slice` to an index: a number, or an architecture name looked up
+/// in the binary's slices.
+fn select_slice(node: &ArtifactNode, slice: Option<&str>) -> hexlora_core::Result<Option<usize>> {
+    let Some(slice) = slice else {
+        return Ok(None);
+    };
+    if let Ok(index) = slice.parse::<usize>() {
+        return Ok(Some(index));
+    }
+    let analysis = analyze_node(node)?;
+    analysis
+        .as_ref()
+        .and_then(|analysis| {
+            analysis
+                .slices
+                .iter()
+                // Slice labels carry a subtype, as in `arm64 (subtype 0)`.
+                .position(|candidate| {
+                    candidate
+                        .architecture
+                        .split_whitespace()
+                        .next()
+                        .is_some_and(|name| name.eq_ignore_ascii_case(slice))
+                })
+        })
+        .map(Some)
+        .ok_or_else(|| {
+            hexlora_core::HexloraError::Malformed(format!(
+                "{} has no \"{slice}\" slice",
+                node.path.display()
+            ))
+        })
+}
+
+pub fn disassemble(
+    args: &DisasmArgs,
+    cancellation: &CancellationToken,
+) -> hexlora_core::Result<DisasmReport> {
+    let artifact = open_artifact(&args.path, cancellation)?;
+    let node = select_binary(&artifact, args.file.as_deref())?;
+    let slice = select_slice(node, args.slice.as_deref())?;
+    let view = CodeView::open(node, slice, args.symbols.as_deref(), cancellation)?;
+    // Symbols the user asked for by name must load; a companion file that
+    // merely happens to sit beside the binary may fail quietly.
+    if let (Some(path), Some(error)) = (&args.symbols, &view.symbol_error) {
+        return Err(hexlora_core::HexloraError::Malformed(format!(
+            "symbols from {}: {error}",
+            path.display()
+        )));
+    }
+    let limits = Limits {
+        max_instructions: args.count,
+    };
+    let mut listings = Vec::new();
+    if !args.functions {
+        let default_target = ["entry".to_string()];
+        let targets = if args.targets.is_empty() {
+            &default_target[..]
+        } else {
+            &args.targets[..]
+        };
+        for target in targets {
+            cancellation.check()?;
+            if target == "entry" && view.program.entry.is_none() {
+                return Err(hexlora_core::HexloraError::Malformed(format!(
+                    "{} has no entry point; pass --at with an address or function name (see --functions)",
+                    node.path.display()
+                )));
+            }
+            listings.push(view.listing_at(target, limits)?);
+        }
+    }
+    let functions = if args.functions {
+        args.max_functions
+    } else {
+        0
+    };
+    Ok(DisasmReport {
+        schema_version: REPORT_SCHEMA_VERSION,
+        path: node.path.clone(),
+        code: report_code(&view, functions),
+        listings,
+    })
+}
+
+fn render_disasm_text(report: &DisasmReport, list_functions: bool) -> String {
+    use std::fmt::Write;
+    let code = &report.code;
+    let mut text = format!(
+        "; {}\n; {} · image base 0x{:x} · {} functions known\n",
+        report.path.display(),
+        code.architecture,
+        code.image_base,
+        code.function_count
+    );
+    if let Some(symbols) = &code.debug_symbols {
+        let _ = writeln!(
+            text,
+            "; {} symbols from {} · {} functions · {} line records",
+            symbols.format.label(),
+            symbols.path.display(),
+            symbols.functions,
+            symbols.line_records
+        );
+    }
+    if let Some(error) = &code.debug_symbols_error {
+        let _ = writeln!(text, "; debug symbols not used: {error}");
+    }
+    if list_functions {
+        text.push('\n');
+        for function in &code.functions {
+            let size = function
+                .size
+                .map(|size| format!("{size:>8}"))
+                .unwrap_or_else(|| format!("{:>8}", "-"));
+            let _ = writeln!(
+                text,
+                "0x{:08x}  {size}  {:<16}  {}",
+                function.address,
+                function.source.label(),
+                function.name
+            );
+        }
+        if code.functions_truncated {
+            let _ = writeln!(
+                text,
+                "; {} of {} functions listed",
+                code.functions.len(),
+                code.function_count
+            );
+        }
+    }
+    for listing in &report.listings {
+        text.push('\n');
+        text.push_str(&listing.to_text());
+    }
+    text
 }
 
 fn run_compare(args: CompareArgs) -> u8 {
@@ -408,6 +784,20 @@ pub fn inspect(
         md5: hashes.contains(&HashAlgorithm::Md5),
     };
 
+    let want_capabilities = args.capabilities || deep;
+    #[cfg(feature = "yara")]
+    let yara_rules = args
+        .yara
+        .as_deref()
+        .map(hexlora_analysis::YaraRules::load)
+        .transpose()?;
+    #[cfg(feature = "yara")]
+    if let Some(rules) = &yara_rules {
+        for warning in rules.warnings() {
+            eprintln!("warning: YARA: {warning}");
+        }
+    }
+
     let mut files = Vec::new();
     let mut findings = Vec::new();
     let mut run_errors = Vec::new();
@@ -438,6 +828,16 @@ pub fn inspect(
         };
         if let Some(analysis) = &mut analysis {
             resolve_dependencies(analysis, &artifact);
+            enrich_triage(analysis);
+            if want_capabilities {
+                match scan_capability_strings(node, cancellation) {
+                    Ok(strings) => apply_capability_strings(analysis, &strings),
+                    Err(error) => errors.push(ReportError {
+                        stage: "capability_strings",
+                        message: error.to_string(),
+                    }),
+                }
+            }
             if want_entropy
                 && !matches!(
                     node.source,
@@ -555,6 +955,47 @@ pub fn inspect(
         } else {
             None
         };
+        let code = if args.functions && analysis.is_some() {
+            let slices = analysis
+                .as_ref()
+                .map(|analysis| analysis.slice_analyses.len())
+                .unwrap_or(0);
+            let mut views = Vec::new();
+            for slice in 0..slices.max(1) {
+                match CodeView::open(node, (slices > 0).then_some(slice), None, cancellation) {
+                    Ok(view) => views.push(report_code(&view, args.max_functions)),
+                    Err(error) => errors.push(ReportError {
+                        stage: "functions",
+                        message: error.to_string(),
+                    }),
+                }
+            }
+            (!views.is_empty()).then_some(views)
+        } else {
+            None
+        };
+        #[cfg(feature = "yara")]
+        let yara = match &yara_rules {
+            Some(rules) => match hexlora_analysis::yara_scan_node(node, rules, cancellation) {
+                Ok(matches) => {
+                    findings.extend(hexlora_analysis::yara_findings(&matches).into_iter().map(
+                        |finding| ReportFinding {
+                            path: node.path.clone(),
+                            finding,
+                        },
+                    ));
+                    Some(matches)
+                }
+                Err(error) => {
+                    errors.push(ReportError {
+                        stage: "yara",
+                        message: error.to_string(),
+                    });
+                    None
+                }
+            },
+            None => None,
+        };
         files.push(FileReport {
             artifact_id: node.id,
             path: node.path.clone(),
@@ -564,6 +1005,9 @@ pub fn inspect(
             analysis,
             metadata,
             strings,
+            code,
+            #[cfg(feature = "yara")]
+            yara,
             errors,
         });
     }
@@ -694,6 +1138,17 @@ pub fn inspect(
             policy_artifact_bytes,
             &generic_findings,
         ));
+        policy_violations.extend(evaluate_capabilities(
+            policy,
+            files.iter().flat_map(|file| {
+                file.analysis.iter().flat_map(move |analysis| {
+                    std::iter::once(analysis)
+                        .chain(&analysis.slice_analyses)
+                        .flat_map(|binary| &binary.capabilities)
+                        .map(move |capability| (file.path.as_path(), capability))
+                })
+            }),
+        ));
     }
     if let (Some(policy), Some(ipa)) = (policy.as_ref(), ipa.as_ref()) {
         policy_violations.extend(evaluate_ipa(policy, ipa));
@@ -794,7 +1249,8 @@ fn write_output(
     Ok(())
 }
 
-fn all_report_findings(report: &InspectionReport) -> Vec<(Severity, String, String)> {
+/// Every finding in a report as (severity, title, evidence, rule ID).
+fn all_report_findings(report: &InspectionReport) -> Vec<(Severity, String, String, String)> {
     let mut findings = report
         .findings
         .iter()
@@ -803,6 +1259,7 @@ fn all_report_findings(report: &InspectionReport) -> Vec<(Severity, String, Stri
                 item.finding.severity,
                 item.finding.title.clone(),
                 item.path.display().to_string(),
+                item.finding.policy_rule_id(),
             )
         })
         .collect::<Vec<_>>();
@@ -815,6 +1272,7 @@ fn all_report_findings(report: &InspectionReport) -> Vec<(Severity, String, Stri
                     .first()
                     .map(|evidence| evidence.path.display().to_string())
                     .unwrap_or_default(),
+                item.rule_id.clone(),
             )
         }));
     }
@@ -824,6 +1282,7 @@ fn all_report_findings(report: &InspectionReport) -> Vec<(Severity, String, Stri
                 item.severity,
                 item.title.clone(),
                 item.evidence_path.display().to_string(),
+                item.rule_id.clone(),
             )
         }));
     }
@@ -833,6 +1292,7 @@ fn all_report_findings(report: &InspectionReport) -> Vec<(Severity, String, Stri
                 item.severity,
                 item.title.clone(),
                 item.evidence_path.display().to_string(),
+                item.rule_id.clone(),
             )
         }));
     }
@@ -842,6 +1302,7 @@ fn all_report_findings(report: &InspectionReport) -> Vec<(Severity, String, Stri
                 item.severity,
                 item.title.clone(),
                 item.evidence_path.display().to_string(),
+                item.rule_id.clone(),
             )
         }));
     }
@@ -850,6 +1311,7 @@ fn all_report_findings(report: &InspectionReport) -> Vec<(Severity, String, Stri
             violation.severity,
             violation.message.clone(),
             format!("policy:{}", violation.rule_id),
+            violation.rule_id.clone(),
         )
     }));
     findings
@@ -872,7 +1334,7 @@ fn render_markdown(report: &InspectionReport) -> String {
         ));
     }
     output.push_str("\n## Findings\n\n| Severity | Finding | Evidence |\n|---|---|---|\n");
-    for (severity, title, evidence) in all_report_findings(report) {
+    for (severity, title, evidence, _) in all_report_findings(report) {
         output.push_str(&format!(
             "| {severity:?} | {} | `{}` |\n",
             title.replace('|', "\\|"),
@@ -885,7 +1347,7 @@ fn render_markdown(report: &InspectionReport) -> String {
 fn render_html(report: &InspectionReport) -> String {
     let rows = all_report_findings(report)
         .into_iter()
-        .map(|(severity, title, evidence)| {
+        .map(|(severity, title, evidence, _)| {
             format!(
                 "<tr><td>{severity:?}</td><td>{}</td><td><code>{}</code></td></tr>",
                 html_escape(&title),
@@ -910,8 +1372,9 @@ fn html_escape(value: &str) -> String {
 fn render_sarif(report: &InspectionReport) -> serde_json::Value {
     let results = all_report_findings(report)
         .into_iter()
-        .map(|(severity, title, evidence)| {
+        .map(|(severity, title, evidence, rule_id)| {
             serde_json::json!({
+                "ruleId": rule_id,
                 "level": match severity { Severity::Critical | Severity::High => "error", Severity::Medium => "warning", _ => "note" },
                 "message": { "text": title },
                 "locations": [{ "physicalLocation": { "artifactLocation": { "uri": evidence } } }]
@@ -940,7 +1403,7 @@ fn report_reaches_threshold(report: &InspectionReport, threshold: SeverityThresh
     let threshold = threshold_rank(threshold);
     all_report_findings(report)
         .iter()
-        .any(|(severity, _, _)| severity_rank(*severity) >= threshold)
+        .any(|(severity, _, _, _)| severity_rank(*severity) >= threshold)
 }
 
 fn threshold_rank(severity: SeverityThreshold) -> u8 {
@@ -982,6 +1445,11 @@ mod tests {
             dependencies: false,
             min_string_length: 4,
             max_strings: 100,
+            capabilities: false,
+            functions: false,
+            max_functions: 10_000,
+            #[cfg(feature = "yara")]
+            yara: None,
             fail_on: None,
             policy: None,
         }
