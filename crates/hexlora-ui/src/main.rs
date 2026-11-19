@@ -2105,6 +2105,9 @@ impl HexloraApp {
                 details.child(section_header("TOOL OUTPUT")).child(
                     div()
                         .id("tool-output-scroll")
+                        // Keep its own height: as a shrinkable flex item it was squeezed
+                        // to a sliver below the fold whenever the panel was already full.
+                        .flex_none()
                         .p_3()
                         .max_h(px(360.))
                         .overflow_scroll()

@@ -5,17 +5,19 @@ preview) was merged to `main` and released as 1.3.0. Remove items as they are do
 
 ## Still to verify on macOS
 
-Before 1.3.0 was released, the Disassembly tab (entry listing, row details, Functions, opening a
-function, Back), the Capabilities tab on a real application, and a YARA scan started with
-`--yara` were clicked through on a Mac. That pass found and fixed a wrong Mach-O entry address.
-Not yet exercised by hand:
+Clicked through on a Mac so far: the Disassembly tab (entry listing, row details, Functions,
+opening a function, Back), with a dSYM beside a Mach-O (function names, source lines, Follow
+Target, Show in Hex, Disassemble from a Symbols row); **Load Symbols…** with a dSYM chosen in the
+dialog; **Scan with YARA Rules…** (`⇧⌘Y`) with a rule file and **Scan with YARA Rule Folder…**
+with a folder, both chosen in their dialogs; the Capabilities tab on a real application; and
+objdump launched from the Disassembly tab, which starts at the function being read. Not yet
+exercised by hand:
 
-- Disassembly with a dSYM beside a Mach-O: function names and source lines; Follow Target and Show
-  in Hex beyond checking that the buttons appear; Disassemble from a Symbols or Exports row.
-- The file dialogs: **Load Symbols…** and **File → Scan with YARA Rules** (`⇧⌘Y`), with a rule
-  file and with a rule folder.
-- External tool handoff from the Disassembly tab. The IDA path writes a script that jumps to the
-  address and passes it with `-S`; it has never been run against a real IDA.
+- Handoff to a graphical tool. Hopper is given the address on the clipboard. The IDA path writes a
+  script that jumps to the address and passes it with `-S`; it has never been run against a real
+  IDA.
+- After Follow Target the page keeps its scroll position, so the new listing can open scrolled
+  down instead of at its first instruction.
 
 ## Documentation and website
 
