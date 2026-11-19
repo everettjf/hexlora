@@ -83,7 +83,7 @@ Drag a file, folder, application, package, or workspace into the window — or u
 - **Release Policy** (`⌥⌘P`) applies the same versioned policy file the CLI uses and lists violations in the Policy tab.
 - **Reports** — **File → Export Markdown Report**, **Export PDF Report**, and **Export Visual Report** (an SVG dashboard) write to a location you choose. Nothing is uploaded.
 - **Workspaces** (`⌘S` to save, `⌥⌘O` to open) keep the artifact path, selected view, bookmarks, notes, and cached results.
-- **External Tools** lists compatible tools installed on your machine and launches them only when you ask. Launched from the Disassembly tab, a tool is handed the address you are reading: radare2 opens at it, IDA jumps to it once its analysis finishes, and objdump disassembles just that code. Tools that take no address on their command line, such as Ghidra, Binary Ninja, and Hopper, are opened on the file with the address copied to the clipboard for their go-to-address command.
+- **External Tools** lists compatible tools installed on your machine and launches them only when you ask. Launched from the Disassembly tab, a tool is handed the address you are reading: radare2 and Hopper open at it, IDA jumps to it once its analysis finishes, and objdump disassembles just that code. Tools that take no address on their command line, such as Ghidra and Binary Ninja, are opened on the file with the address copied to the clipboard for their go-to-address command.
 
 Three layout presets — **Standard**, **Focus**, and **Analysis** — are in the View menu along with a high-contrast mode. `⌘N` opens an independent window. The interface is English-only.
 

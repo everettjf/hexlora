@@ -16,6 +16,7 @@
   <key>CFBundleShortVersionString</key><string>1.1.21</string>
   <key>CFBundleVersion</key><string>1.1.21</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>NSAppleEventsUsageDescription</key><string>Hexlora asks Hopper to open the file you are inspecting at the selected address.</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
   <key>CFBundleDocumentTypes</key>

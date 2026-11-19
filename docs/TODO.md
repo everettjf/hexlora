@@ -10,12 +10,12 @@ opening a function, Back), with a dSYM beside a Mach-O (function names, source l
 Target, Show in Hex, Disassemble from a Symbols row); **Load Symbols…** with a dSYM chosen in the
 dialog; **Scan with YARA Rules…** (`⇧⌘Y`) with a rule file and **Scan with YARA Rule Folder…**
 with a folder, both chosen in their dialogs; the Capabilities tab on a real application; and
-objdump launched from the Disassembly tab, which starts at the function being read. Not yet
+objdump launched from the Disassembly tab, which starts at the function being read; and Hopper
+launched from the Disassembly tab, which opens the file at the selected address. Not yet
 exercised by hand:
 
-- Handoff to a graphical tool. Hopper is given the address on the clipboard. The IDA path writes a
-  script that jumps to the address and passes it with `-S`; it has never been run against a real
-  IDA.
+- Handoff to IDA. It writes a script that jumps to the address and passes it with `-S`; it has
+  never been run against a real IDA.
 
 ## Documentation and website
 

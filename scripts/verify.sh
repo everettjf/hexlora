@@ -14,6 +14,7 @@ cargo check --locked -p hexlora-cli
 # skipped out loud, so the Rust gate above can still be run on Linux.
 if command -v plutil >/dev/null 2>&1; then
   plutil -lint packaging/macos/Info.plist
+  plutil -lint packaging/macos/Hexlora.entitlements
 else
   echo "verify: plutil not found; skipped the Info.plist check (macOS only)" >&2
 fi

@@ -343,6 +343,11 @@ fn ida_address_arguments(address: u64) -> Result<Vec<String>> {
     Ok(vec![format!("-S{}", script.display())])
 }
 
+/// Hopper's launcher jumps to an address with `-j`, and takes the file after
+/// `-e` like every launch of it.
+fn hopper_address_arguments(address: u64) -> Result<Vec<String>> {
+    Ok(vec!["-j".into(), format!("0x{address:x}"), "-e".into()])
+}
 fn objdump_address_arguments(address: u64) -> Result<Vec<String>> {
     Ok(vec![
         "-d".into(),
@@ -404,16 +409,21 @@ impl ToolRegistry {
             ],
             &[],
         ));
-        r.register(CommandTool::new(
-            "hopper",
-            "Hopper",
-            &[
-                "/Applications/Hopper Disassembler v4.app/Contents/MacOS/hopper",
-                "/Applications/Hopper Disassembler.app/Contents/MacOS/hopper",
+        r.register(
+            CommandTool::new(
                 "hopper",
-            ],
-            &[],
-        ));
+                "Hopper",
+                &[
+                    "/Applications/Hopper Disassembler v4.app/Contents/MacOS/hopper",
+                    "/Applications/Hopper Disassembler.app/Contents/MacOS/hopper",
+                    "hopper",
+                ],
+                // The launcher opens nothing without `-e`; given a bare path it
+                // only prints its usage.
+                &["-e"],
+            )
+            .with_address_args(hopper_address_arguments),
+        );
         r.register(
             CommandTool::new("radare2", "radare2", &["r2", "radare2"], &[])
                 .with_address_args(|address| Ok(vec!["-s".into(), format!("0x{address:x}")])),
@@ -525,7 +535,7 @@ mod tests {
             ("objdump", true),
             ("ghidra", false),
             ("binary-ninja", false),
-            ("hopper", false),
+            ("hopper", true),
             ("cutter", false),
             ("strings", false),
         ] {
@@ -538,6 +548,10 @@ mod tests {
         let radare = CommandTool::new("r", "r", &["r2"], &["-A"])
             .with_address_args(|address| Ok(vec!["-s".into(), format!("0x{address:x}")]));
         assert_eq!(radare.arguments(None).unwrap(), ["-A"]);
+        assert_eq!(
+            hopper_address_arguments(0x1000).unwrap(),
+            ["-j", "0x1000", "-e"]
+        );
         assert_eq!(
             radare.arguments(Some(0x1_4000_1060)).unwrap(),
             ["-s", "0x140001060"]

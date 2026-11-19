@@ -32,6 +32,7 @@ if command -v codesign >/dev/null 2>&1; then
       --deep \
       --options runtime \
       --timestamp \
+      --entitlements "$project_root/packaging/macos/Hexlora.entitlements" \
       --sign "$signing_identity" \
       "$app_dir"
   fi
