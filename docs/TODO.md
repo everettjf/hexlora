@@ -16,8 +16,6 @@ exercised by hand:
 - Handoff to a graphical tool. Hopper is given the address on the clipboard. The IDA path writes a
   script that jumps to the address and passes it with `-S`; it has never been run against a real
   IDA.
-- After Follow Target the page keeps its scroll position, so the new listing can open scrolled
-  down instead of at its first instruction.
 
 ## Documentation and website
 

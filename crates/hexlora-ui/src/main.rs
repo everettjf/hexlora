@@ -2825,10 +2825,13 @@ impl HexloraApp {
             .child(
                 div()
                     // One scroll position per tab: switching tabs must not land mid-page.
+                    // A listing counts as a page of its own, so following a branch opens
+                    // the target at its first instruction.
                     .id(SharedString::from(format!(
-                        "inspector-scroll-{}-{}",
+                        "inspector-scroll-{}-{}-{:x}",
                         self.tab.label(),
-                        self.selected.map(|id| id.to_string()).unwrap_or_default()
+                        self.selected.map(|id| id.to_string()).unwrap_or_default(),
+                        self.listing_scroll_key()
                     )))
                     .flex_1()
                     .min_h_0()

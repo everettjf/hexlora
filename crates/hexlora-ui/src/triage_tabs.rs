@@ -510,6 +510,18 @@ impl HexloraApp {
         );
     }
 
+    /// Tells one Disassembly page from another: the start of the listing on
+    /// screen, and zero for the function list and every other tab.
+    pub(super) fn listing_scroll_key(&self) -> u64 {
+        if self.tab != InspectorTab::Disassembly || self.code.show_functions {
+            return 0;
+        }
+        self.code
+            .listing
+            .as_ref()
+            .map_or(0, |listing| listing.start)
+    }
+
     /// The address an external tool should open at: the selected line of the
     /// listing, or its start, while the Disassembly tab is showing one.
     pub(super) fn handoff_address(&self) -> Option<u64> {
