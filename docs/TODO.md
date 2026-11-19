@@ -1,38 +1,19 @@
 # Outstanding work
 
 Written 2026-11-18, after the binary-triage work (capabilities, YARA, debug symbols, disassembly
-preview) was merged to `main`. Remove items as they are done.
+preview) was merged to `main` and released as 1.3.0. Remove items as they are done.
 
-## Release 1.3.0
+## Still to verify on macOS
 
-The version is already 1.3.0 in `Cargo.toml` and the notes are in
-[`docs/releases/1.3.0.md`](releases/1.3.0.md). Nothing has been tagged or published. These steps
-need a Mac with the Developer ID certificate in its keychain and the notarization credentials in
-its environment; they cannot be done from a Linux or cloud session.
+Before 1.3.0 was released, the Disassembly tab (entry listing, row details, Functions, opening a
+function, Back), the Capabilities tab on a real application, and a YARA scan started with
+`--yara` were clicked through on a Mac. That pass found and fixed a wrong Mach-O entry address.
+Not yet exercised by hand:
 
-1. On `main`, with `HEXLORA_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_SPECIFIC_PASSWORD`, and
-   `APPLE_TEAM_ID` set, run `scripts/release-macos.sh 1.3.0`. It builds, signs, notarizes, staples,
-   and verifies the app, and writes the artifacts to `dist/release-1.3.0/`.
-2. Upload `Hexlora-1.3.0-macos.zip` and `hexlora-cli-1.3.0-aarch64-apple-darwin.tar.gz` to a
-   `hexlora-v1.3.0` release in `everettjf/homebrew-tap`.
-3. Update the version and both `sha256` values in `packaging/homebrew/Casks/hexlora.rb` and
-   `packaging/homebrew/Formula/hexlora-cli.rb`, here and in the tap repository.
-4. Commit, then tag `v1.3.0` and push the tag. The tag workflow builds the Windows and Linux
-   packages and publishes the GitHub release with the written notes.
-5. Confirm `brew upgrade --cask hexlora` and `brew upgrade hexlora-cli` install 1.3.0.
-
-Do not push the tag before steps 1–3: it would publish a release with no macOS build.
-
-## Verify on macOS before releasing
-
-The new desktop tabs were exercised on Linux under a virtual display, and macOS CI builds and
-launches the app bundle, but nobody has clicked through them on a Mac.
-
-- Disassembly: open a Mach-O with a dSYM beside it; check function names, source lines, Follow
-  Target, Back, Show in Hex, and Disassemble from a Symbols or Exports row.
-- The file dialogs, which could not be driven on Linux: **Load Symbols…** and
-  **File → Scan with YARA Rules** (`⇧⌘Y`), with a rule file and with a rule folder.
-- Capabilities on a real application, to judge whether the default findings are too noisy.
+- Disassembly with a dSYM beside a Mach-O: function names and source lines; Follow Target and Show
+  in Hex beyond checking that the buttons appear; Disassemble from a Symbols or Exports row.
+- The file dialogs: **Load Symbols…** and **File → Scan with YARA Rules** (`⇧⌘Y`), with a rule
+  file and with a rule folder.
 - External tool handoff from the Disassembly tab. The IDA path writes a script that jumps to the
   address and passes it with `-S`; it has never been run against a real IDA.
 
