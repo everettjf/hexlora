@@ -2894,7 +2894,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hexlora"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "anyhow",
  "embed-resource",
@@ -2919,7 +2919,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-analysis"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "apple-xar",
  "chrono",
@@ -2954,7 +2954,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-android"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "hexlora-analysis",
  "hexlora-core",
@@ -2967,7 +2967,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-cli"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "chrono",
  "clap",
@@ -2989,7 +2989,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-compare"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "hex",
  "hexlora-analysis",
@@ -3003,7 +3003,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-core"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "chrono",
  "indexmap",
@@ -3015,7 +3015,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-disasm"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "goblin",
  "hexlora-core",
@@ -3027,7 +3027,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-format"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "authenticode",
  "goblin",
@@ -3043,7 +3043,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-ios"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "chrono",
  "hex",
@@ -3061,7 +3061,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-linux"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "flate2",
  "hexlora-core",
@@ -3075,7 +3075,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-policy"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "chrono",
  "hexlora-android",
@@ -3091,7 +3091,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-signature"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "hexlora-core",
  "indexmap",
@@ -3100,7 +3100,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-symbols"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "flate2",
  "gimli",
@@ -3114,7 +3114,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-tools"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "hexlora-core",
  "wait-timeout",
@@ -3122,7 +3122,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-triage"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "aho-corasick",
  "boreal",
@@ -3136,7 +3136,7 @@ dependencies = [
 
 [[package]]
 name = "hexlora-windows"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "hexlora-analysis",
  "hexlora-core",
