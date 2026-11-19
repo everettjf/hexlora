@@ -282,6 +282,14 @@ fn the_running_test_binary_disassembles_from_many_functions() {
         return;
     };
     assert!(program.functions.len() > 100, "{}", program.functions.len());
+    // The default listing starts here, so a wrong entry address breaks `disasm`
+    // on every executable of that format.
+    let entry = program.entry.expect("an executable has an entry point");
+    assert!(program.is_code(entry), "entry 0x{entry:x} is not code");
+    assert!(
+        !listing(&program, &bytes, "entry").instructions.is_empty(),
+        "the entry point disassembles"
+    );
     let mut calls_named = 0usize;
     for function in program
         .functions

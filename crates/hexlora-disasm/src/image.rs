@@ -416,15 +416,9 @@ fn discover_macho(macho: &goblin::mach::MachO<'_>, data: &[u8], file_base: u64) 
     }
 
     let mut functions = FunctionSet::default();
-    // `LC_MAIN` gives a file offset from the start of `__TEXT`; the older
-    // `LC_UNIXTHREAD` gives the address itself.
-    let entry = (macho.entry != 0).then(|| {
-        if macho.old_style_entry {
-            macho.entry
-        } else {
-            text_address.unwrap_or(0).wrapping_add(macho.entry)
-        }
-    });
+    // The parser has already turned an `LC_MAIN` offset into a virtual address,
+    // so both entry styles arrive here as addresses.
+    let entry = (macho.entry != 0).then_some(macho.entry);
     if let Some(entry) = entry {
         functions.add(entry, None, None, FunctionSource::Entry);
     }
